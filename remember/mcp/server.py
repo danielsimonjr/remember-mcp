@@ -193,6 +193,7 @@ async def list_tools() -> list[Tool]:
 @server.call_tool()
 async def call_tool(name: str, arguments: Dict[str, Any]) -> list[TextContent]:
     """Handle tool calls"""
+    global scheduler
     system = get_system()
 
     try:
@@ -291,7 +292,6 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> list[TextContent]:
             )]
 
         elif name == "scheduler_status":
-            global scheduler
             status = scheduler.get_status() if scheduler else {"error": "Scheduler not initialized"}
 
             return [TextContent(
@@ -300,7 +300,6 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> list[TextContent]:
             )]
 
         elif name == "scheduler_control":
-            global scheduler
             action = arguments["action"]
 
             if action == "start":
