@@ -251,17 +251,55 @@ class RememberSystem:
         age_days = age_days or self.archive_threshold_days
         min_salience = min_salience or self.archive_min_salience
 
-        # Get memories eligible for archival
-        # (This is a simplified implementation - full version would query DB directly)
-        eligible_memories = []
+        # Calculate age threshold in milliseconds (database uses ms timestamps)
+        age_threshold_ms = int(time.time() * 1000) - (age_days * 24 * 60 * 60 * 1000)
 
-        # For now, we'll implement a basic version
-        # TODO: Add proper query to find old/decayed memories
+        # Query for eligible memories
+        if user_id:
+            query = """
+                SELECT * FROM memories
+                WHERE user_id = ? AND created_at <= ? AND salience < ?
+                ORDER BY salience ASC, created_at ASC
+            """
+            cursor = await asyncio.to_thread(
+                self.active.storage.conn.execute,
+                query,
+                (user_id, age_threshold_ms, min_salience)
+            )
+        else:
+            query = """
+                SELECT * FROM memories
+                WHERE created_at <= ? AND salience < ?
+                ORDER BY salience ASC, created_at ASC
+            """
+            cursor = await asyncio.to_thread(
+                self.active.storage.conn.execute,
+                query,
+                (age_threshold_ms, min_salience)
+            )
+
+        rows = await asyncio.to_thread(cursor.fetchall)
+        eligible_memories = [dict(row) for row in rows]
 
         if not eligible_memories:
+            # Count active memories even when nothing to archive
+            if user_id:
+                cursor = await asyncio.to_thread(
+                    self.active.storage.conn.execute,
+                    "SELECT COUNT(*) as count FROM memories WHERE user_id = ?",
+                    (user_id,)
+                )
+            else:
+                cursor = await asyncio.to_thread(
+                    self.active.storage.conn.execute,
+                    "SELECT COUNT(*) as count FROM memories"
+                )
+            row = await asyncio.to_thread(cursor.fetchone)
+            active_remaining = row['count'] if row else 0
+            
             return ArchiveStats(
                 archived_count=0,
-                active_remaining=0,
+                active_remaining=active_remaining,
                 archive_size_bytes=0,
                 compression_ratio=1.0
             )
@@ -273,9 +311,35 @@ class RememberSystem:
         index_path = self.archive_dir / f"{archive_filename}.json"
 
         # Encode to video using memvid
-        encoder = MemvidEncoder()
-        encoder.add_chunks([mem.content for mem in eligible_memories])
-        encoder.build_video(str(video_path), str(index_path))
+        try:
+            encoder = MemvidEncoder()
+            encoder.add_chunks([mem['content'] for mem in eligible_memories])
+            encoder.build_video(str(video_path), str(index_path))
+        except Exception as e:
+            print(f"ERROR: Memvid encoding failed: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return early if encoding fails
+            if user_id:
+                cursor = await asyncio.to_thread(
+                    self.active.storage.conn.execute,
+                    "SELECT COUNT(*) as count FROM memories WHERE user_id = ?",
+                    (user_id,)
+                )
+            else:
+                cursor = await asyncio.to_thread(
+                    self.active.storage.conn.execute,
+                    "SELECT COUNT(*) as count FROM memories"
+                )
+            row = await asyncio.to_thread(cursor.fetchone)
+            active_remaining = row['count'] if row else 0
+            
+            return ArchiveStats(
+                archived_count=0,
+                active_remaining=active_remaining,
+                archive_size_bytes=0,
+                compression_ratio=1.0
+            )
 
         # Update archive index
         if user_id:
@@ -289,15 +353,38 @@ class RememberSystem:
             }
 
         # Remove from active storage
-        # TODO: Delete archived memories from active DB
+        memory_ids = [mem['id'] for mem in eligible_memories]
+        placeholders = ','.join('?' * len(memory_ids))
+        delete_query = f"DELETE FROM memories WHERE id IN ({placeholders})"
+        await asyncio.to_thread(
+            self.active.storage.conn.execute,
+            delete_query,
+            memory_ids
+        )
+        await asyncio.to_thread(self.active.storage.conn.commit)
 
         archive_size = video_path.stat().st_size
-        original_size = sum(len(mem.content) for mem in eligible_memories)
+        original_size = sum(len(mem['content']) for mem in eligible_memories)
         compression_ratio = original_size / archive_size if archive_size > 0 else 1.0
+
+        # Count remaining active memories
+        if user_id:
+            cursor = await asyncio.to_thread(
+                self.active.storage.conn.execute,
+                "SELECT COUNT(*) as count FROM memories WHERE user_id = ?",
+                (user_id,)
+            )
+        else:
+            cursor = await asyncio.to_thread(
+                self.active.storage.conn.execute,
+                "SELECT COUNT(*) as count FROM memories"
+            )
+        row = await asyncio.to_thread(cursor.fetchone)
+        active_remaining = row['count'] if row else 0
 
         return ArchiveStats(
             archived_count=len(eligible_memories),
-            active_remaining=0,  # TODO: Count remaining
+            active_remaining=active_remaining,
             archive_size_bytes=archive_size,
             compression_ratio=compression_ratio
         )
@@ -338,9 +425,35 @@ class RememberSystem:
         Returns:
             System statistics
         """
-        # Count active memories
-        # TODO: Proper count from DB
-        active_count = 0
+        # Count active memories from database
+        if user_id:
+            count_query = "SELECT COUNT(*) as count FROM memories WHERE user_id = ?"
+            avg_query = "SELECT AVG(salience) as avg FROM memories WHERE user_id = ?"
+            cursor = await asyncio.to_thread(
+                self.active.storage.conn.execute, count_query, (user_id,)
+            )
+            row = await asyncio.to_thread(cursor.fetchone)
+            active_count = row['count'] if row else 0
+
+            cursor = await asyncio.to_thread(
+                self.active.storage.conn.execute, avg_query, (user_id,)
+            )
+            row = await asyncio.to_thread(cursor.fetchone)
+            avg_salience = row['avg'] if row and row['avg'] is not None else 0.0
+        else:
+            count_query = "SELECT COUNT(*) as count FROM memories"
+            avg_query = "SELECT AVG(salience) as avg FROM memories"
+            cursor = await asyncio.to_thread(
+                self.active.storage.conn.execute, count_query
+            )
+            row = await asyncio.to_thread(cursor.fetchone)
+            active_count = row['count'] if row else 0
+
+            cursor = await asyncio.to_thread(
+                self.active.storage.conn.execute, avg_query
+            )
+            row = await asyncio.to_thread(cursor.fetchone)
+            avg_salience = row['avg'] if row and row['avg'] is not None else 0.0
 
         # Count archived memories
         archive_count = 0
@@ -379,7 +492,7 @@ class RememberSystem:
             archive_size=archive_size,
             total_size=total_size,
             compression_ratio=compression_ratio,
-            avg_salience=0.0  # TODO: Calculate from DB
+            avg_salience=avg_salience
         )
 
     def close(self) -> None:
