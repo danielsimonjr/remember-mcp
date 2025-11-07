@@ -1,0 +1,14 @@
+# Core dependencies
+numpy>=1.24.0
+sentence-transformers>=2.2.2
+mcp>=0.9.0
+python-dotenv>=1.0.0
+
+# OpenMemory (local install)
+# Install with: pip install -e ../openmemory-python
+
+# Memvid
+memvid>=0.2.0
+
+# Additional
+schedule>=1.2.0
