@@ -3,9 +3,16 @@ Comprehensive test of remember-mcp Phase 2
 Tests: active memory, archival scheduler, MCP server
 """
 import asyncio
+import sys
 import time
 from remember import RememberSystem
 from remember.scheduler import ArchivalScheduler
+
+# Fix Windows console encoding for Unicode
+if sys.platform == 'win32':
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 
 
 async def test_phase2():
