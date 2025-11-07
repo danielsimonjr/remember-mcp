@@ -4,11 +4,13 @@ sentence-transformers>=2.2.2
 mcp>=0.9.0
 python-dotenv>=1.0.0
 
-# OpenMemory (local install)
-# Install with: pip install -e ../openmemory-python
+# OpenMemory - Published on PyPI
+openmemory-python>=1.0.0
 
-# Memvid
-memvid>=0.2.0
+# Memvid - Use fork with numpy 2.x support
+# Official: memvid>=0.2.0
+# Fork with numpy 2.x: git+https://github.com/danielsimonjr/memvid.git
+memvid>=0.1.4
 
 # Additional
 schedule>=1.2.0
