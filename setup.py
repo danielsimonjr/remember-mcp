@@ -30,8 +30,10 @@ setup(
         "sentence-transformers>=2.2.2",
         "mcp>=0.9.0",
         "python-dotenv>=1.0.0",
-        "memvid>=0.2.0",
+        "openmemory-python>=1.0.0",
         "schedule>=1.2.0",
+        # Note: memvid must be installed from GitHub fork for numpy 2.x support
+        # pip install git+https://github.com/danielsimonjr/memvid.git@main
     ],
     entry_points={
         "console_scripts": [

@@ -1,0 +1,25 @@
+[project]
+name = "remember-mcp"
+version = "1.0.0"
+description = "Hybrid memory MCP server combining OpenMemory (active) and memvid (archive)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp>=2.10.5",
+    "numpy>=1.24.0",
+    "sentence-transformers>=2.2.2",
+    "python-dotenv>=1.0.0",
+    "openmemory-python>=1.0.0",
+    "schedule>=1.2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/danielsimonjr/remember-mcp"
+Repository = "https://github.com/danielsimonjr/remember-mcp"
+
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["remember"]
