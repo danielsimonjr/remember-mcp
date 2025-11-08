@@ -3,10 +3,11 @@ name = "remember-mcp"
 version = "1.0.0"
 description = "Hybrid memory MCP server combining OpenMemory (active) and memvid (archive)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastmcp>=2.10.5",
-    "numpy>=1.24.0",
+    "numpy>=2.0",
+    "scipy>=1.14",
     "sentence-transformers>=2.2.2",
     "python-dotenv>=1.0.0",
     "openmemory-python>=1.0.0",
@@ -24,6 +25,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["remember"]
+
+[tool.uv]
+# Prevent building these packages from source - use pre-built wheels only
+# Python 3.13 has stable wheel support for numpy >=2.0 and scipy >=1.14
+no-build-package = ["scipy", "numpy"]
 
 [tool.uv.sources]
 memvid = { git = "https://github.com/danielsimonjr/memvid.git", branch = "main" }
