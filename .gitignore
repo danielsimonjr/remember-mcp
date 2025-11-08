@@ -56,3 +56,5 @@ Thumbs.db
 
 # Logs
 *.log
+test_file_index/
+file_index/
