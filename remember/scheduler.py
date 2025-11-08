@@ -46,6 +46,7 @@ class ArchivalScheduler:
             print("[Scheduler] Already running")
             return
 
+        self.enabled = True
         self.running = True
         self.task = asyncio.create_task(self._run_loop())
         print(f"[Scheduler] Started (interval: {self.interval}s)")
