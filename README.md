@@ -1,10 +1,10 @@
 # remember-mcp
 
-**Hybrid long-term memory system combining cognitive architecture with video-based archival storage.**
+**Hybrid long-term memory system with file indexing capabilities - combining cognitive architecture with QR-encoded video storage.**
 
 remember-mcp integrates:
 - **[openmemory-python](https://github.com/danielsimonjr/openmemory-python)** - Active memory with cognitive sectors and decay
-- **[memvid](https://github.com/danielsimonjr/memvid)** - Video-based compressed archival storage
+- **[memvid](https://github.com/danielsimonjr/memvid)** - QR-encoded video storage for memories and files
 
 ## Architecture
 
@@ -14,6 +14,8 @@ remember-mcp integrates:
 New Memory → Active (OpenMemory) → Decay → Archive (Memvid)
                     ↑                            ↓
                     └────────── Recall ──────────┘
+
+New File → Index → QR Video → Semantic Search
 ```
 
 **Active Memory** (Hot):
@@ -30,6 +32,13 @@ New Memory → Active (OpenMemory) → Decay → Archive (Memvid)
 - Long-term storage
 - Semantic search capable
 
+**File Index** (Video):
+- QR-encoded video storage
+- Text, PDF, EPUB, code files
+- Line number preservation
+- Metadata tracking
+- Semantic search
+
 ### Memory Lifecycle
 
 1. **Creation** → Memory enters active storage
@@ -40,13 +49,24 @@ New Memory → Active (OpenMemory) → Decay → Archive (Memvid)
 
 ## Features
 
+### Memory Management
 - 🧠 **Cognitive Memory** - 5 sector types (episodic, semantic, procedural, emotional, reflective)
-- 📹 **Video Archival** - Compress old memories to MP4 format
+- 📹 **Video Archival** - Compress old memories to MP4 format with QR codes
 - ⚡ **Hybrid Search** - Query both active and archived memories
 - 🔄 **Auto-Archival** - Scheduled compression of decayed memories
 - 📊 **Memory Stats** - Track active vs archived, decay rates, storage usage
 - 👤 **User Isolation** - Per-user memory spaces and archives
-- 🔌 **MCP Server** - Model Context Protocol integration
+
+### File Indexing
+- 📁 **File Indexing** - Index files to QR-encoded video storage
+- 📄 **Multi-Format** - Support for text, PDF, EPUB, Python, JavaScript, markdown
+- 🔢 **Line Tracking** - Preserve line numbers for code files
+- 🔍 **File Search** - Semantic search across all indexed files
+- 🏷️ **Metadata** - Track file paths, hashes, types, sizes, timestamps
+- 🎯 **Filtering** - Search by file type, path pattern, or content
+
+### Integration
+- 🔌 **MCP Server** - 13 Model Context Protocol tools
 
 ## Installation
 
@@ -55,6 +75,8 @@ pip install -r requirements.txt
 ```
 
 ## Quick Start
+
+### Memory Management
 
 ```python
 from remember import RememberSystem
@@ -85,28 +107,76 @@ archived = await remember.archive_old_memories(
 )
 ```
 
+### File Indexing
+
+```python
+from remember.file_indexer import FileIndexer
+
+# Initialize indexer
+indexer = FileIndexer(index_dir="file_index/")
+
+# Index a single file
+result = indexer.index_file(
+    "path/to/file.py",
+    preserve_lines=True  # Keeps line numbers for code
+)
+
+# Index entire directory
+stats = indexer.index_directory(
+    dir_path="src/",
+    pattern="**/*.py",  # All Python files
+    exclude=[".git", "__pycache__"]
+)
+
+# Search indexed files
+results = indexer.search(
+    query="authentication logic",
+    file_type_filter="python",
+    top_k=10
+)
+
+# List all indexed files
+files = indexer.list_indexed_files()
+```
+
 ## MCP Server
 
 Run the MCP server:
 
 ```bash
-python -m remember.mcp.server
+python server.py
 ```
 
-Available tools:
-- `add_memory` - Add new memory
+### Memory Tools (7)
+- `add_memory` - Add new memory to active storage
 - `query_memory` - Hybrid search (active + archive)
-- `archive_old` - Manually trigger archival
+- `archive_memories` - Manually trigger archival
 - `recall_memory` - Move archived memory back to active
 - `get_stats` - System statistics
+- `scheduler_status` - Get archival scheduler status
+- `scheduler_control` - Control archival scheduler (start/stop/run_now)
+
+### File Indexing Tools (6)
+- `index_file` - Index a file into video-encoded storage
+- `index_directory` - Bulk index directory with glob patterns
+- `search_files` - Semantic search across indexed files
+- `list_indexed_files` - List all indexed files
+- `get_file_info` - Get detailed file metadata
+- `get_file_stats` - Get indexing statistics
 
 ## Use Cases
 
+### Memory Management
 - **Personal Knowledge Base** - Store notes, ideas, learnings with automatic archival
 - **AI Agent Memory** - Long-term memory for conversational agents
-- **Research Archive** - Compress papers, articles with semantic search
-- **Code Context** - Remember project history and decisions
 - **Digital Journaling** - Life events with episodic memory
+- **Research Notes** - Compress research with semantic search
+
+### File Indexing
+- **Codebase Search** - Index entire projects for semantic code search
+- **Documentation Archive** - Index PDFs, markdown, technical docs
+- **Knowledge Repository** - Searchable archive of papers, articles, books
+- **Project Memory** - Index code with line numbers for context retrieval
 
 ## Architecture Details
 
@@ -124,6 +194,13 @@ Available tools:
 - Streaming capable
 - Offline-first
 
+### File Index Layer
+- QR-encoded video storage
+- Per-file video archives
+- Metadata JSON tracking
+- Chunk-level line numbers
+- Semantic search via FAISS
+
 ### Hybrid Manager
 - Routes queries to appropriate layer
 - Manages memory lifecycle
@@ -137,11 +214,13 @@ Available tools:
 RememberSystem(
     active_db="memory.db",           # Active memory database
     archive_dir="archives/",         # Archive video directory
-    segment_size=10000,              # Memories per segment
     archive_threshold_days=60,       # Age before archival
     archive_min_salience=0.2,        # Min salience to archive
-    auto_archive_enabled=True,       # Enable auto-archival
-    auto_archive_interval=86400      # Archive check interval (seconds)
+    auto_archive_enabled=True        # Enable auto-archival
+)
+
+FileIndexer(
+    index_dir="file_index/"          # File index directory
 )
 ```
 
@@ -149,13 +228,16 @@ RememberSystem(
 
 ```bash
 # Install dev dependencies
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 
-# Run tests
-pytest tests/
+# Run memory tests
+python test_complete.py
 
-# Format code
-black remember/
+# Run file indexing tests
+python test_file_indexing.py
+
+# List available MCP tools
+python list_tools.py
 ```
 
 ## License
