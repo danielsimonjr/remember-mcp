@@ -2,6 +2,12 @@
 """
 Test file indexing functionality
 """
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import asyncio
 from remember.file_indexer import FileIndexer
 
@@ -28,8 +34,9 @@ async def main():
 
     # Test 2: Index the file_indexer.py module
     print("\n[Test 2] Indexing file_indexer.py...")
+    parent_dir = Path(__file__).parent.parent
     result2 = indexer.index_file(
-        "C:/mcp-servers/remember-mcp/remember/file_indexer.py",
+        str(parent_dir / "remember" / "file_indexer.py"),
         chunk_size=1024,
         overlap=128,
         preserve_lines=True
