@@ -58,3 +58,7 @@ Thumbs.db
 *.log
 test_file_index/
 file_index/
+
+# Claude Code settings (local only)
+.claude/
+.mcp.json
