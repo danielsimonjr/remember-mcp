@@ -1,7 +1,5 @@
 """Test recall from archive"""
 import asyncio
-import sys
-sys.path.insert(0, 'C:/mcp-servers/remember-mcp')
 
 from remember.system import RememberSystem
 
