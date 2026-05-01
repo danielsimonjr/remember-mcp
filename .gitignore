@@ -62,3 +62,6 @@ file_index/
 # Claude Code settings (local only)
 .claude/
 .mcp.json
+# Added by post-migration audit (2026-05-01)
+node_modules/
+.venv/
