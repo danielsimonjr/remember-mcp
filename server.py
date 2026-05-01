@@ -3,6 +3,7 @@ Main MCP Server entry point for remember-mcp
 Direct tool registration without import_server
 """
 import asyncio
+import sys
 from fastmcp import FastMCP
 from typing import Optional, List, Dict, Any
 from remember.system import RememberSystem
@@ -371,10 +372,32 @@ async def setup():
     get_file_indexer()
 
 
+def shutdown() -> None:
+    """Release cached resources (MemvidRetriever pool, OpenMemory storage).
+
+    Called from ``main()`` after ``app.run`` returns so FAISS indexes and
+    mp4 readers don't leak on server exit.
+    """
+    global remember_system, file_indexer
+    if remember_system is not None:
+        try:
+            remember_system.close()
+        except Exception as e:  # noqa: BLE001 — defensive cleanup on exit
+            print(f"Error closing remember_system: {e}", file=sys.stderr)
+    if file_indexer is not None:
+        try:
+            file_indexer.close()
+        except Exception as e:  # noqa: BLE001 — defensive cleanup on exit
+            print(f"Error closing file_indexer: {e}", file=sys.stderr)
+
+
 def main():
     """Main entry point"""
     asyncio.run(setup())
-    app.run(transport="stdio")
+    try:
+        app.run(transport="stdio")
+    finally:
+        shutdown()
 
 
 if __name__ == "__main__":

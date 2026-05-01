@@ -5,6 +5,7 @@ Extends memvid to support file indexing with metadata tracking
 import os
 import json
 import hashlib
+import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
@@ -13,6 +14,8 @@ try:
     from memvid import MemvidEncoder, MemvidRetriever
 except ImportError:
     raise ImportError("memvid not found. Install with: pip install memvid")
+
+logger = logging.getLogger(__name__)
 
 
 def _get_allowed_index_roots() -> List[Path]:
@@ -102,6 +105,43 @@ class FileIndexer:
         # Master index for all files
         self.master_video = self.index_dir / "master_index.mp4"
         self.master_index = self.index_dir / "master_index.json"
+
+        # Cache MemvidRetriever instances by (video_path, index_path) so we
+        # don't reload the FAISS index + reopen the mp4 reader on every search.
+        self._retriever_cache: Dict[Tuple[str, str], Any] = {}
+
+    def _get_retriever(self, video_path: str, index_path: str) -> Any:
+        """
+        Return a cached MemvidRetriever for the given (video_path, index_path)
+        pair. Caching avoids reloading the FAISS index and reopening the mp4
+        reader on every search call.
+        """
+        key = (video_path, index_path)
+        retriever = self._retriever_cache.get(key)
+        if retriever is None:
+            retriever = MemvidRetriever(
+                video_file=video_path,
+                index_file=index_path,
+            )
+            self._retriever_cache[key] = retriever
+        return retriever
+
+    def close(self) -> None:
+        """Release cached MemvidRetriever instances (FAISS indexes + mp4
+        readers). Safe to call multiple times.
+        """
+        for key, retriever in list(self._retriever_cache.items()):
+            close_fn = getattr(retriever, "close", None)
+            try:
+                if callable(close_fn):
+                    close_fn()
+                else:
+                    clear_fn = getattr(retriever, "clear_cache", None)
+                    if callable(clear_fn):
+                        clear_fn()
+            except Exception as e:  # noqa: BLE001 — defensive cleanup
+                logger.warning("Error closing retriever %s: %s", key, e)
+        self._retriever_cache.clear()
 
     def _load_metadata(self) -> Dict[str, Dict[str, Any]]:
         """Load file metadata from disk"""
@@ -417,10 +457,12 @@ class FileIndexer:
                 continue
 
             try:
-                # Search this file's archive
-                retriever = MemvidRetriever(
-                    video_file=video_path,
-                    index_file=index_path
+                # Reuse cached retriever — FAISS index + mp4 reader would
+                # otherwise be reloaded on every search call (file-handle
+                # leak + slow).
+                retriever = self._get_retriever(
+                    video_path=video_path,
+                    index_path=index_path,
                 )
 
                 hits = retriever.search(query, top_k=top_k)

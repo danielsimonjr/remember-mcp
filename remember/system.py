@@ -3,16 +3,20 @@ Main RememberSystem - Hybrid memory manager
 Integrates OpenMemory (active) with memvid (archive)
 """
 import os
+import sys
 import time
 import asyncio
+import logging
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from .types import (
     HybridMemoryResult,
     MemoryLocation,
     ArchiveStats,
     SystemStats
 )
+
+logger = logging.getLogger(__name__)
 
 # Import OpenMemory (will be installed separately)
 try:
@@ -79,6 +83,30 @@ class RememberSystem:
         # Load existing archives
         self._load_archive_index()
 
+        # Serialize archive/add/forget paths to prevent SELECT-DELETE races
+        # against concurrent writers on the shared SQLite connection.
+        self._write_lock = asyncio.Lock()
+
+        # Cache MemvidRetriever instances by (video_path, index_path) so we
+        # don't reload the FAISS index + reopen the mp4 reader on every query.
+        self._retriever_cache: Dict[Tuple[str, str], Any] = {}
+
+    def _get_retriever(self, video_path: str, index_path: str) -> Any:
+        """
+        Return a cached MemvidRetriever for the given (video_path, index_path)
+        pair, creating one on first use. Caching avoids reloading the FAISS
+        index and reopening the mp4 reader on every query.
+        """
+        key = (video_path, index_path)
+        retriever = self._retriever_cache.get(key)
+        if retriever is None:
+            retriever = MemvidRetriever(
+                video_path=video_path,
+                index_path=index_path,
+            )
+            self._retriever_cache[key] = retriever
+        return retriever
+
     def _load_archive_index(self) -> None:
         """Load existing archive files"""
         for archive_file in self.archive_dir.glob("*.mp4"):
@@ -118,12 +146,13 @@ class RememberSystem:
         Returns:
             Dict with memory ID and sector info
         """
-        result = await self.active.add_memory(
-            content=content,
-            user_id=user_id,
-            tags=tags,
-            metadata=metadata
-        )
+        async with self._write_lock:
+            result = await self.active.add_memory(
+                content=content,
+                user_id=user_id,
+                tags=tags,
+                metadata=metadata
+            )
 
         result["location"] = MemoryLocation.ACTIVE
         return result
@@ -201,10 +230,11 @@ class RememberSystem:
 
         for timestamp, archive_info in user_archives.items():
             try:
-                # Create retriever for this archive
-                retriever = MemvidRetriever(
+                # Reuse cached retriever for this archive (FAISS + mp4 reader
+                # would otherwise be reloaded on every query — leak + slow).
+                retriever = self._get_retriever(
                     video_path=archive_info["file"],
-                    index_path=archive_info["index"]
+                    index_path=archive_info["index"],
                 )
 
                 # Search archive
@@ -254,6 +284,27 @@ class RememberSystem:
         # Calculate age threshold in milliseconds (database uses ms timestamps)
         age_threshold_ms = int(time.time() * 1000) - (age_days * 24 * 60 * 60 * 1000)
 
+        # Serialize the entire archive flow against add_memory / forget paths
+        # so concurrent writers cannot corrupt the SELECT → encode → DELETE
+        # sequence on the shared SQLite connection.
+        async with self._write_lock:
+            return await self._archive_old_memories_locked(
+                user_id=user_id,
+                age_threshold_ms=age_threshold_ms,
+                min_salience=min_salience,
+            )
+
+    async def _archive_old_memories_locked(
+        self,
+        user_id: Optional[str],
+        age_threshold_ms: int,
+        min_salience: float,
+    ) -> ArchiveStats:
+        """
+        Inner archive routine — must be called with ``self._write_lock`` held.
+        SELECT and DELETE run inside a single ``with conn:`` block so they
+        commit atomically as one transaction.
+        """
         # Query for eligible memories
         if user_id:
             query = """
@@ -352,16 +403,20 @@ class RememberSystem:
                 "created_at": timestamp
             }
 
-        # Remove from active storage
+        # Remove from active storage. Use ``with conn:`` so the DELETE +
+        # COMMIT run as a single atomic transaction; the surrounding
+        # ``self._write_lock`` further guarantees no add_memory / forget
+        # interleaves between the eligibility SELECT above and this DELETE.
         memory_ids = [mem['id'] for mem in eligible_memories]
         placeholders = ','.join('?' * len(memory_ids))
         delete_query = f"DELETE FROM memories WHERE id IN ({placeholders})"
-        await asyncio.to_thread(
-            self.active.storage.conn.execute,
-            delete_query,
-            memory_ids
-        )
-        await asyncio.to_thread(self.active.storage.conn.commit)
+
+        def _delete_atomic() -> None:
+            conn = self.active.storage.conn
+            with conn:  # BEGIN ... COMMIT (rolls back on exception)
+                conn.execute(delete_query, memory_ids)
+
+        await asyncio.to_thread(_delete_atomic)
 
         archive_size = video_path.stat().st_size
         original_size = sum(len(mem['content']) for mem in eligible_memories)
@@ -465,16 +520,26 @@ class RememberSystem:
             for archive_info in user_archives.values():
                 try:
                     archive_size += Path(archive_info["file"]).stat().st_size
-                except:
-                    pass
+                except OSError as e:
+                    # Permission denied / missing file / corrupted index entry —
+                    # log and keep tallying the rest. Don't swallow non-OSError.
+                    logger.warning(
+                        "Could not stat archive %s: %s",
+                        archive_info.get("file"),
+                        e,
+                    )
         else:
             for user_archives in self.archive_index.values():
                 archive_count += len(user_archives)
                 for archive_info in user_archives.values():
                     try:
                         archive_size += Path(archive_info["file"]).stat().st_size
-                    except:
-                        pass
+                    except OSError as e:
+                        logger.warning(
+                            "Could not stat archive %s: %s",
+                            archive_info.get("file"),
+                            e,
+                        )
 
         # Get active DB size
         active_db_size = 0
@@ -496,5 +561,24 @@ class RememberSystem:
         )
 
     def close(self) -> None:
-        """Close system and cleanup"""
+        """Close system and cleanup.
+
+        Clears the cached MemvidRetriever pool (releasing FAISS indexes and
+        mp4 readers) and closes the active OpenMemory storage. Safe to call
+        multiple times.
+        """
+        for key, retriever in list(self._retriever_cache.items()):
+            close_fn = getattr(retriever, "close", None)
+            try:
+                if callable(close_fn):
+                    close_fn()
+                else:
+                    # MemvidRetriever exposes clear_cache() but no close();
+                    # call it to drop frame caches and large in-memory state.
+                    clear_fn = getattr(retriever, "clear_cache", None)
+                    if callable(clear_fn):
+                        clear_fn()
+            except Exception as e:  # noqa: BLE001 — defensive cleanup
+                logger.warning("Error closing retriever %s: %s", key, e)
+        self._retriever_cache.clear()
         self.active.close()
