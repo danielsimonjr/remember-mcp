@@ -15,6 +15,51 @@ except ImportError:
     raise ImportError("memvid not found. Install with: pip install memvid")
 
 
+def _get_allowed_index_roots() -> List[Path]:
+    """
+    Resolve the list of allowed root directories for file indexing.
+
+    Read from env var ``REMEMBER_INDEX_ROOTS`` (comma-separated absolute
+    paths). If unset, default to ``~/Documents`` only. This is a security
+    boundary: an MCP client cannot index files outside these roots, which
+    prevents prompt-injected requests for ``~/.ssh/id_rsa``, ``.env`` files,
+    OAuth caches, etc. from being embedded into the queryable QR-video index.
+    """
+    raw = os.environ.get("REMEMBER_INDEX_ROOTS", "")
+    if raw.strip():
+        roots = [Path(p.strip()).expanduser().resolve() for p in raw.split(",") if p.strip()]
+    else:
+        roots = [(Path.home() / "Documents").resolve()]
+    return roots
+
+
+def _is_within_allowed_roots(abs_path: Path, allowed_roots: List[Path]) -> bool:
+    """Return True if ``abs_path`` is the same as, or a descendant of, any allowed root."""
+    resolved = abs_path.resolve()
+    for root in allowed_roots:
+        try:
+            if resolved == root or resolved.is_relative_to(root):
+                return True
+        except (ValueError, OSError):
+            continue
+    return False
+
+
+def _is_dotfile_path(path: Path) -> bool:
+    """
+    Return True if any component of ``path`` (file name or any parent dir)
+    starts with ``.`` (e.g. ``.env``, ``.ssh/id_rsa``, ``.aws/credentials``).
+    The drive letter / root anchor is excluded.
+    """
+    for part in path.parts:
+        # Skip Windows drive ("C:\\") and POSIX root ("/")
+        if part in ("/", "\\") or (len(part) >= 2 and part[1] == ":"):
+            continue
+        if part.startswith("."):
+            return True
+    return False
+
+
 class FileIndexer:
     """
     File indexing system using memvid for QR-encoded video storage.
@@ -27,15 +72,28 @@ class FileIndexer:
     - Semantic search across indexed files
     """
 
-    def __init__(self, index_dir: str = "file_index/"):
+    def __init__(
+        self,
+        index_dir: str = "file_index/",
+        allowed_roots: Optional[List[str]] = None,
+    ):
         """
         Initialize FileIndexer
 
         Args:
             index_dir: Directory for file index storage
+            allowed_roots: Optional list of absolute paths that constrain
+                which files/dirs may be indexed. If ``None``, falls back to
+                the ``REMEMBER_INDEX_ROOTS`` env var (comma-separated), and
+                ultimately to ``~/Documents``.
         """
         self.index_dir = Path(index_dir)
         self.index_dir.mkdir(parents=True, exist_ok=True)
+
+        if allowed_roots is not None:
+            self.allowed_roots = [Path(p).expanduser().resolve() for p in allowed_roots]
+        else:
+            self.allowed_roots = _get_allowed_index_roots()
 
         # File metadata database: maps file_hash -> metadata
         self.metadata_file = self.index_dir / "file_metadata.json"
@@ -94,7 +152,8 @@ class FileIndexer:
         file_path: str,
         chunk_size: int = 1024,
         overlap: int = 128,
-        preserve_lines: bool = True
+        preserve_lines: bool = True,
+        index_dotfiles: bool = False,
     ) -> Dict[str, Any]:
         """
         Index a single file into the video-encoded archive
@@ -104,11 +163,34 @@ class FileIndexer:
             chunk_size: Size of text chunks
             overlap: Overlap between chunks
             preserve_lines: Preserve line numbers for code files
+            index_dotfiles: If False (default), reject files whose name or
+                any parent directory starts with '.' (e.g. ``.env``,
+                ``.ssh/id_rsa``). Pass True to opt in.
 
         Returns:
             Dictionary with indexing stats and metadata
+
+        Raises:
+            PermissionError: If ``file_path`` resolves outside the configured
+                allow-list, or is a dotfile and ``index_dotfiles`` is False.
         """
         file_path = os.path.abspath(file_path)
+        resolved = Path(file_path).resolve()
+
+        # Security: enforce allow-list before opening anything
+        if not _is_within_allowed_roots(resolved, self.allowed_roots):
+            raise PermissionError(
+                f"Refusing to index path outside allowed roots: {file_path}. "
+                f"Allowed roots: {[str(r) for r in self.allowed_roots]}. "
+                f"Configure via REMEMBER_INDEX_ROOTS env var."
+            )
+
+        # Security: reject dotfiles unless explicitly opted-in
+        if not index_dotfiles and _is_dotfile_path(resolved):
+            raise PermissionError(
+                f"Refusing to index dotfile: {file_path}. "
+                f"Pass index_dotfiles=True to override."
+            )
 
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -223,7 +305,8 @@ class FileIndexer:
         pattern: str = "**/*",
         exclude: Optional[List[str]] = None,
         chunk_size: int = 1024,
-        overlap: int = 128
+        overlap: int = 128,
+        index_dotfiles: bool = False,
     ) -> Dict[str, Any]:
         """
         Index all files in a directory matching a pattern
@@ -234,11 +317,26 @@ class FileIndexer:
             exclude: List of patterns to exclude
             chunk_size: Chunk size for text
             overlap: Overlap between chunks
+            index_dotfiles: If False (default), skip dotfiles and dot-dirs.
 
         Returns:
             Summary of indexing operation
+
+        Raises:
+            PermissionError: If ``dir_path`` resolves outside the configured
+                allow-list.
         """
         dir_path = Path(dir_path)
+        resolved_dir = dir_path.resolve()
+
+        # Security: enforce allow-list before walking anything
+        if not _is_within_allowed_roots(resolved_dir, self.allowed_roots):
+            raise PermissionError(
+                f"Refusing to index directory outside allowed roots: {dir_path}. "
+                f"Allowed roots: {[str(r) for r in self.allowed_roots]}. "
+                f"Configure via REMEMBER_INDEX_ROOTS env var."
+            )
+
         if not dir_path.exists():
             raise FileNotFoundError(f"Directory not found: {dir_path}")
 
@@ -259,11 +357,17 @@ class FileIndexer:
                 skipped.append(str(file_path))
                 continue
 
+            # Security: skip dotfiles unless explicitly opted-in
+            if not index_dotfiles and _is_dotfile_path(file_path.resolve()):
+                skipped.append(str(file_path))
+                continue
+
             try:
                 result = self.index_file(
                     str(file_path),
                     chunk_size=chunk_size,
-                    overlap=overlap
+                    overlap=overlap,
+                    index_dotfiles=index_dotfiles,
                 )
                 indexed.append(result)
             except Exception as e:

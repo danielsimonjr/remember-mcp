@@ -220,9 +220,32 @@ RememberSystem(
 )
 
 FileIndexer(
-    index_dir="file_index/"          # File index directory
+    index_dir="file_index/",         # File index directory
+    allowed_roots=None,              # See "File-indexing security" below
 )
 ```
+
+### File-indexing security
+
+To prevent prompt-injected MCP clients from indexing sensitive files (SSH
+keys, `.env`, OAuth caches, credential stores), file indexing is constrained
+to an allow-list of root directories.
+
+- **Env var:** `REMEMBER_INDEX_ROOTS` — comma-separated list of absolute
+  paths. Set this at server startup. Example:
+  ```
+  REMEMBER_INDEX_ROOTS=C:\Users\me\Documents,C:\Users\me\Projects
+  ```
+- **Default:** if `REMEMBER_INDEX_ROOTS` is unset, only `~/Documents` is
+  allowed.
+- **Programmatic override:** pass `allowed_roots=[...]` to `FileIndexer(...)`.
+- **Dotfiles** (anything whose name or any parent directory begins with `.`,
+  e.g. `.env`, `.ssh/id_rsa`, `.aws/credentials`) are rejected by default.
+  Pass `index_dotfiles=True` on `index_file` / `index_directory` (or via the
+  MCP tool argument) to opt in for a single call.
+- Requests that violate either constraint raise `PermissionError` from the
+  Python API and return `{"error": "permission_denied", "message": "..."}`
+  from the MCP tool layer.
 
 ## Development
 

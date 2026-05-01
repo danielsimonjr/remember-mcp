@@ -204,7 +204,8 @@ async def index_file(
     file_path: str,
     chunk_size: int = 1024,
     overlap: int = 128,
-    preserve_lines: bool = True
+    preserve_lines: bool = True,
+    index_dotfiles: bool = False,
 ) -> Dict[str, Any]:
     """
     Index a file into video-encoded storage using QR codes
@@ -212,24 +213,37 @@ async def index_file(
     Supports: text, Python, JavaScript, PDF, EPUB, markdown, and more.
     Automatically preserves line numbers for code files.
 
+    Security: file_path must resolve inside one of the allowed index roots
+    (env var ``REMEMBER_INDEX_ROOTS``, comma-separated absolute paths;
+    default ``~/Documents``). Dotfiles (``.env``, ``.ssh/...``, etc.) are
+    rejected by default — pass ``index_dotfiles=True`` to opt in.
+
     Args:
         file_path: Path to file to index
         chunk_size: Size of text chunks (default: 1024)
         overlap: Overlap between chunks (default: 128)
         preserve_lines: Preserve line numbers for code (default: true)
+        index_dotfiles: Allow dotfiles to be indexed (default: false)
 
     Returns:
-        Indexing statistics and metadata
+        Indexing statistics and metadata, or ``{"error": "..."}`` on
+        permission/not-found errors.
     """
     indexer = get_file_indexer()
-    result = await asyncio.to_thread(
-        indexer.index_file,
-        file_path=file_path,
-        chunk_size=chunk_size,
-        overlap=overlap,
-        preserve_lines=preserve_lines
-    )
-    return result
+    try:
+        result = await asyncio.to_thread(
+            indexer.index_file,
+            file_path=file_path,
+            chunk_size=chunk_size,
+            overlap=overlap,
+            preserve_lines=preserve_lines,
+            index_dotfiles=index_dotfiles,
+        )
+        return result
+    except PermissionError as e:
+        return {"error": "permission_denied", "message": str(e)}
+    except FileNotFoundError as e:
+        return {"error": "not_found", "message": str(e)}
 
 
 @app.tool()
@@ -238,10 +252,16 @@ async def index_directory(
     pattern: str = "**/*",
     exclude: Optional[List[str]] = None,
     chunk_size: int = 1024,
-    overlap: int = 128
+    overlap: int = 128,
+    index_dotfiles: bool = False,
 ) -> Dict[str, Any]:
     """
     Index all files in a directory matching a pattern
+
+    Security: dir_path must resolve inside one of the allowed index roots
+    (env var ``REMEMBER_INDEX_ROOTS``, comma-separated absolute paths;
+    default ``~/Documents``). Dotfiles and dot-dirs are skipped unless
+    ``index_dotfiles=True``.
 
     Args:
         dir_path: Directory path to index
@@ -249,20 +269,28 @@ async def index_directory(
         exclude: List of patterns to exclude
         chunk_size: Chunk size for text
         overlap: Overlap between chunks
+        index_dotfiles: Allow dotfiles/dot-dirs to be indexed (default: false)
 
     Returns:
-        Summary of indexing operation
+        Summary of indexing operation, or ``{"error": "..."}`` on permission
+        / not-found errors.
     """
     indexer = get_file_indexer()
-    result = await asyncio.to_thread(
-        indexer.index_directory,
-        dir_path=dir_path,
-        pattern=pattern,
-        exclude=exclude,
-        chunk_size=chunk_size,
-        overlap=overlap
-    )
-    return result
+    try:
+        result = await asyncio.to_thread(
+            indexer.index_directory,
+            dir_path=dir_path,
+            pattern=pattern,
+            exclude=exclude,
+            chunk_size=chunk_size,
+            overlap=overlap,
+            index_dotfiles=index_dotfiles,
+        )
+        return result
+    except PermissionError as e:
+        return {"error": "permission_denied", "message": str(e)}
+    except FileNotFoundError as e:
+        return {"error": "not_found", "message": str(e)}
 
 
 @app.tool()

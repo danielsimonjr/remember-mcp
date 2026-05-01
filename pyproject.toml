@@ -1,6 +1,6 @@
 [project]
 name = "remember-mcp"
-version = "1.0.0"
+version = "1.0.1"
 description = "Hybrid memory MCP server combining OpenMemory (active) and memvid (archive)"
 readme = "README.md"
 requires-python = "==3.13.*"
