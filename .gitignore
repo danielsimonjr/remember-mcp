@@ -41,6 +41,7 @@ ENV/
 archives/
 *.mp4
 *.json
+!sbom.json
 
 # Models cache
 .cache/

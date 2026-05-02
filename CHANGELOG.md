@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Documentation
+- Add CycloneDX SBOM (sbom.json).
+
 ### Fixed
 
 - **Stdout pollution at import (`remember/system.py`).** OpenMemory and
