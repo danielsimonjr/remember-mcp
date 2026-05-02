@@ -7,6 +7,7 @@ import sys
 import time
 import asyncio
 import logging
+import contextlib
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 from .types import (
@@ -18,18 +19,23 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
-# Import OpenMemory (will be installed separately)
+# Import OpenMemory (will be installed separately).
+# Redirect stdout to stderr during import so any library-level `print(...)`
+# (e.g. openmemory's "Google Generative AI library not available" notice)
+# can't corrupt the JSON-RPC stdio framing this server uses.
 try:
-    from openmemory import MemorySystem as OpenMemory
-    from openmemory.types import MemoryResult
+    with contextlib.redirect_stdout(sys.stderr):
+        from openmemory import MemorySystem as OpenMemory
+        from openmemory.types import MemoryResult
 except ImportError:
     raise ImportError(
         "OpenMemory not found. Install with: pip install -e ../openmemory-python"
     )
 
-# Import memvid
+# Import memvid (same stdout-isolation rationale)
 try:
-    from memvid import MemvidEncoder, MemvidRetriever
+    with contextlib.redirect_stdout(sys.stderr):
+        from memvid import MemvidEncoder, MemvidRetriever
 except ImportError:
     raise ImportError(
         "Memvid not found. Install with: pip install memvid"

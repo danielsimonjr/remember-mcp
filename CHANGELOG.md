@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Stdout pollution at import (`remember/system.py`).** OpenMemory and
+  memvid both `print(...)` at import time (e.g. "Warning: Google Generative
+  AI library not available"). Stdio MCP servers reserve stdout for
+  JSON-RPC framing — any stray byte breaks the protocol. The two
+  vendor imports are now wrapped in `contextlib.redirect_stdout(sys.stderr)`
+  so library notices land in the conventional log channel without
+  corrupting the wire. Verified: `STDOUT_LEAK_LEN: 0` after import on
+  the venv that produces the warnings.
+
 ### Performance
 
 - **Defer heavy imports for sub-handshake-window MCP startup** (`server.py`).
