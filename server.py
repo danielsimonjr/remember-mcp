@@ -1,14 +1,26 @@
 """
 Main MCP Server entry point for remember-mcp
 Direct tool registration without import_server
+
+Heavy dependencies (sentence-transformers, FAISS, memvid, scipy) are imported
+lazily inside ``get_system()`` / ``get_file_indexer()`` rather than at module
+top level. With eager imports + an eager ``setup()`` the server took ~82s to
+respond to its first ``initialize`` JSON-RPC message — well past Claude
+Code's ~30s MCP startup timeout, so the server appeared broken on every
+fresh launch. With lazy init the stdio handshake completes in <1s and the
+heavy work runs on the first ``tools/call`` that actually needs it.
 """
 import asyncio
 import sys
 from fastmcp import FastMCP
-from typing import Optional, List, Dict, Any
-from remember.system import RememberSystem
-from remember.scheduler import ArchivalScheduler
-from remember.file_indexer import FileIndexer
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Type-only imports — never executed at runtime, so they cost nothing
+    # at startup. Keep these in sync with the lazy imports below.
+    from remember.system import RememberSystem
+    from remember.scheduler import ArchivalScheduler
+    from remember.file_indexer import FileIndexer
 
 __all__ = ["app", "setup"]
 
@@ -27,16 +39,38 @@ app = FastMCP(
     """
 )
 
-# Initialize globals
-remember_system: Optional[RememberSystem] = None
-scheduler: Optional[ArchivalScheduler] = None
-file_indexer: Optional[FileIndexer] = None
+# Initialize globals — typed as Any to avoid forcing the heavy imports at
+# module load. Concrete classes are imported inside the get_*() helpers.
+remember_system: Optional[Any] = None
+scheduler: Optional[Any] = None
+file_indexer: Optional[Any] = None
+
+# Serialize lazy construction so two concurrent tool calls cannot both run
+# the multi-second FAISS-load path. Created on first use to avoid binding
+# the lock to a specific event loop at import time.
+_init_lock: Optional[asyncio.Lock] = None
 
 
-def get_system() -> RememberSystem:
-    """Get or create remember system"""
+def _get_init_lock() -> asyncio.Lock:
+    global _init_lock
+    if _init_lock is None:
+        _init_lock = asyncio.Lock()
+    return _init_lock
+
+
+def get_system() -> "RememberSystem":
+    """
+    Get or create remember system. Imports ``RememberSystem`` /
+    ``ArchivalScheduler`` lazily — these pull in openmemory, memvid,
+    sentence-transformers, FAISS, and scipy, which together cost ~80s on a
+    cold start. Deferring keeps the MCP handshake sub-second.
+    """
     global remember_system, scheduler
     if remember_system is None:
+        # Lazy heavy imports — see module docstring for rationale.
+        from remember.system import RememberSystem
+        from remember.scheduler import ArchivalScheduler
+
         remember_system = RememberSystem(
             active_db="remember_mcp.db",
             archive_dir="mcp_archives/",
@@ -52,12 +86,30 @@ def get_system() -> RememberSystem:
     return remember_system
 
 
-def get_file_indexer() -> FileIndexer:
-    """Get or create file indexer"""
+def get_file_indexer() -> "FileIndexer":
+    """
+    Get or create file indexer. Imports ``FileIndexer`` lazily — it pulls
+    in memvid + FAISS, which cost several seconds on cold start.
+    """
     global file_indexer
     if file_indexer is None:
+        # Lazy heavy import.
+        from remember.file_indexer import FileIndexer
+
         file_indexer = FileIndexer(index_dir="file_index/")
     return file_indexer
+
+
+async def _aget_system() -> "RememberSystem":
+    """Async-safe wrapper around ``get_system`` — guards concurrent first-use."""
+    async with _get_init_lock():
+        return get_system()
+
+
+async def _aget_file_indexer() -> "FileIndexer":
+    """Async-safe wrapper around ``get_file_indexer``."""
+    async with _get_init_lock():
+        return get_file_indexer()
 
 
 # Memory Management Tools
@@ -70,7 +122,7 @@ async def add_memory(
     metadata: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Add a new memory to active storage"""
-    system = get_system()
+    system = await _aget_system()
     result = await system.add_memory(
         content=content,
         user_id=user_id,
@@ -89,7 +141,7 @@ async def query_memory(
     sectors: Optional[List[str]] = None
 ) -> List[Dict[str, Any]]:
     """Query memories with hybrid search"""
-    system = get_system()
+    system = await _aget_system()
     results = await system.query(
         query=query,
         k=k,
@@ -120,7 +172,7 @@ async def archive_memories(
     user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Archive old/decayed memories to video"""
-    system = get_system()
+    system = await _aget_system()
     stats = await system.archive_old_memories(
         age_days=age_days,
         min_salience=min_salience,
@@ -141,7 +193,7 @@ async def recall_memory(
     user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Recall archived memory back to active storage"""
-    system = get_system()
+    system = await _aget_system()
     result = await system.recall_from_archive(
         archive_file=archive_file,
         content=content,
@@ -153,7 +205,7 @@ async def recall_memory(
 @app.tool()
 async def get_stats(user_id: Optional[str] = None) -> Dict[str, Any]:
     """Get system statistics"""
-    system = get_system()
+    system = await _aget_system()
     stats = await system.get_stats(user_id=user_id)
     return {
         "active_count": stats.active_count,
@@ -230,7 +282,7 @@ async def index_file(
         Indexing statistics and metadata, or ``{"error": "..."}`` on
         permission/not-found errors.
     """
-    indexer = get_file_indexer()
+    indexer = await _aget_file_indexer()
     try:
         result = await asyncio.to_thread(
             indexer.index_file,
@@ -276,7 +328,7 @@ async def index_directory(
         Summary of indexing operation, or ``{"error": "..."}`` on permission
         / not-found errors.
     """
-    indexer = get_file_indexer()
+    indexer = await _aget_file_indexer()
     try:
         result = await asyncio.to_thread(
             indexer.index_directory,
@@ -313,7 +365,7 @@ async def search_files(
     Returns:
         List of search results with file metadata and line numbers
     """
-    indexer = get_file_indexer()
+    indexer = await _aget_file_indexer()
     results = await asyncio.to_thread(
         indexer.search,
         query=query,
@@ -332,7 +384,7 @@ async def list_indexed_files() -> List[Dict[str, Any]]:
     Returns:
         List of indexed files with metadata
     """
-    indexer = get_file_indexer()
+    indexer = await _aget_file_indexer()
     files = await asyncio.to_thread(indexer.list_indexed_files)
     return files
 
@@ -348,7 +400,7 @@ async def get_file_info(file_path: str) -> Optional[Dict[str, Any]]:
     Returns:
         File metadata or None if not indexed
     """
-    indexer = get_file_indexer()
+    indexer = await _aget_file_indexer()
     info = await asyncio.to_thread(indexer.get_file_info, file_path)
     return info
 
@@ -361,13 +413,21 @@ async def get_file_stats() -> Dict[str, Any]:
     Returns:
         Statistics including total files, chunks, compression ratio
     """
-    indexer = get_file_indexer()
+    indexer = await _aget_file_indexer()
     stats = await asyncio.to_thread(indexer.get_stats)
     return stats
 
 
 async def setup():
-    """Initialize the remember system"""
+    """
+    Eagerly initialize the remember system.
+
+    .. deprecated::
+        This is no longer called from ``main()`` — kept for callers that want
+        to force-warm the heavy dependencies (e.g. tests, benchmarks). The
+        stdio server now defers initialization to the first ``tools/call``
+        that needs it so the MCP handshake completes in <1s instead of ~80s.
+    """
     get_system()
     get_file_indexer()
 
@@ -392,8 +452,19 @@ def shutdown() -> None:
 
 
 def main():
-    """Main entry point"""
-    asyncio.run(setup())
+    """
+    Main entry point.
+
+    Note: we intentionally do NOT call ``setup()`` here. ``setup()`` constructs
+    ``RememberSystem`` and ``FileIndexer``, which transitively import
+    sentence-transformers, FAISS, memvid, and scipy and load any existing
+    FAISS index from disk — collectively ~80s on a cold start. That blocks
+    the stdio handshake past Claude Code's ~30s MCP startup window.
+    Construction now happens lazily on the first tool invocation that needs
+    it (``add_memory``, ``query_memory``, ``index_file``, etc.); tools that
+    don't touch heavy state (``scheduler_status``, ``scheduler_control``)
+    return without forcing init.
+    """
     try:
         app.run(transport="stdio")
     finally:

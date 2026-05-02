@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Performance
+
+- **Defer heavy imports for sub-handshake-window MCP startup** (`server.py`).
+  `RememberSystem`, `ArchivalScheduler`, and `FileIndexer` were imported at
+  module top, transitively pulling in OpenMemory, memvid,
+  sentence-transformers, FAISS, and scipy; on top of that, `main()` ran an
+  eager `asyncio.run(setup())` that constructed both objects and loaded
+  their FAISS indexes from disk before `app.run("stdio")` could process the
+  `initialize` JSON-RPC message. Cold-start handshake measured 220.88s on a
+  Windows/Dropbox box — Claude Code's MCP startup window is ~30s, so the
+  server appeared broken on every fresh launch and Wave 4 round-trip
+  testing only succeeded after lifting the harness cap to 150s. Heavy
+  imports now live inside `get_system()` / `get_file_indexer()`, the eager
+  `setup()` call is removed from `main()`, and concurrent first-use is
+  serialized through an `asyncio.Lock`. Cold handshake now ~6-8s
+  (floor set by `fastmcp` itself per `python -X importtime`); the heavy
+  work runs on the first tool call that needs it (~60-90s, acceptable
+  because the client is no longer racing the handshake timeout).
+  Regression guard: `tests/test_handshake_timing.py` (10s budget).
+  Tools that don't touch heavy state (`scheduler_status`,
+  `scheduler_control`) continue to return without forcing init.
+
 ## [1.0.2] - 2026-04-30
 
 ### Fixed
