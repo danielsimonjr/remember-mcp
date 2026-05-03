@@ -263,6 +263,10 @@ python test_file_indexing.py
 python list_tools.py
 ```
 
+## Recent updates
+
+See [CHANGELOG.md](CHANGELOG.md) for recent changes — lazy imports for sub-handshake-window startup, stdout-pollution fix.
+
 ## License
 
 MIT License
