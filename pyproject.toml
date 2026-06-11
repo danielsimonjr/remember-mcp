@@ -5,8 +5,8 @@ description = "Hybrid memory MCP server combining OpenMemory (active) and memvid
 readme = "README.md"
 requires-python = "==3.13.*"
 dependencies = [
-    "fastmcp==2.10.5",
-    "mcp==1.12.0",
+    "fastmcp>=3.2.0",
+    "mcp>=1.23.0",
     "pydantic==2.11.7",
     "numpy>=2.0",
     "scipy>=1.14",

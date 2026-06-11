@@ -9,7 +9,8 @@ import asyncio
 from server import app
 
 async def main():
-    tools = await app.get_tools()
+    # fastmcp 3.x renamed get_tools() -> list_tools()
+    tools = await app.list_tools()
     print(f"Found {len(tools)} tools:")
     for tool in tools:
         print(f"  - {tool.name}")
