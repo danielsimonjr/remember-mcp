@@ -3,9 +3,19 @@ Automatic archival scheduler for remember-mcp
 Runs background task to archive old/decayed memories
 """
 import asyncio
+import sys
 import time
 from typing import Optional
 from datetime import datetime
+
+
+def _log(*args: object) -> None:
+    """Emit scheduler diagnostics to stderr.
+
+    stdout is reserved for this server's JSON-RPC stdio framing; printing
+    status/error lines there would corrupt the MCP message stream.
+    """
+    print(*args, file=sys.stderr, flush=True)
 
 
 class ArchivalScheduler:
@@ -43,13 +53,13 @@ class ArchivalScheduler:
     async def start(self) -> None:
         """Start the scheduler"""
         if self.running:
-            print("[Scheduler] Already running")
+            _log("[Scheduler] Already running")
             return
 
         self.enabled = True
         self.running = True
         self.task = asyncio.create_task(self._run_loop())
-        print(f"[Scheduler] Started (interval: {self.interval}s)")
+        _log(f"[Scheduler] Started (interval: {self.interval}s)")
 
     async def stop(self) -> None:
         """Stop the scheduler"""
@@ -64,7 +74,7 @@ class ArchivalScheduler:
             except asyncio.CancelledError:
                 pass
 
-        print("[Scheduler] Stopped")
+        _log("[Scheduler] Stopped")
 
     async def _run_loop(self) -> None:
         """Main scheduler loop"""
@@ -75,7 +85,7 @@ class ArchivalScheduler:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"[Scheduler] Error: {e}")
+                _log(f"[Scheduler] Error: {e}")
                 await asyncio.sleep(60)  # Wait 1 minute before retry
 
     async def _run_archival(self) -> None:
@@ -86,7 +96,7 @@ class ArchivalScheduler:
         start_time = time.time()
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        print(f"\n[Scheduler] Running archival at {timestamp}")
+        _log(f"\n[Scheduler] Running archival at {timestamp}")
 
         try:
             # Archive old memories
@@ -101,21 +111,21 @@ class ArchivalScheduler:
             elapsed = time.time() - start_time
 
             if stats.archived_count > 0:
-                print(f"[Scheduler] Archived {stats.archived_count} memories")
-                print(f"[Scheduler] Archive size: {stats.archive_size_bytes:,} bytes")
-                print(f"[Scheduler] Compression: {stats.compression_ratio:.2f}x")
+                _log(f"[Scheduler] Archived {stats.archived_count} memories")
+                _log(f"[Scheduler] Archive size: {stats.archive_size_bytes:,} bytes")
+                _log(f"[Scheduler] Compression: {stats.compression_ratio:.2f}x")
             else:
-                print(f"[Scheduler] No memories eligible for archival")
+                _log(f"[Scheduler] No memories eligible for archival")
 
-            print(f"[Scheduler] Completed in {elapsed:.2f}s")
-            print(f"[Scheduler] Total archived (lifetime): {self.total_archived}")
+            _log(f"[Scheduler] Completed in {elapsed:.2f}s")
+            _log(f"[Scheduler] Total archived (lifetime): {self.total_archived}")
 
         except Exception as e:
-            print(f"[Scheduler] Archival failed: {e}")
+            _log(f"[Scheduler] Archival failed: {e}")
 
     async def run_now(self) -> None:
         """Manually trigger archival immediately"""
-        print("[Scheduler] Manual archival triggered")
+        _log("[Scheduler] Manual archival triggered")
         await self._run_archival()
 
     def get_status(self) -> dict:

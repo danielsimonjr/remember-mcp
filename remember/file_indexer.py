@@ -491,7 +491,7 @@ class FileIndexer:
                     results.append(result)
 
             except Exception as e:
-                print(f"Error searching {meta['file_path']}: {e}")
+                logger.error(f"Error searching {meta['file_path']}: {e}")
                 continue
 
         # Sort by score and return top_k

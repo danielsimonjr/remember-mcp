@@ -262,7 +262,7 @@ class RememberSystem:
                     ))
 
             except Exception as e:
-                print(f"Error querying archive {archive_info['file']}: {e}")
+                print(f"Error querying archive {archive_info['file']}: {e}", file=sys.stderr)
                 continue
 
         return results
@@ -373,7 +373,7 @@ class RememberSystem:
             encoder.add_chunks([mem['content'] for mem in eligible_memories])
             encoder.build_video(str(video_path), str(index_path))
         except Exception as e:
-            print(f"ERROR: Memvid encoding failed: {e}")
+            print(f"ERROR: Memvid encoding failed: {e}", file=sys.stderr)
             import traceback
             traceback.print_exc()
             # Return early if encoding fails
