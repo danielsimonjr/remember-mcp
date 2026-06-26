@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+- **Patched transitive dependency vulnerabilities** in `uv.lock`: `cryptography` 47.0.0 → 49.0.0 (HIGH), `starlette` 1.2.1 → 1.3.1 (HIGH), `pydantic-settings` 2.14.0 → 2.14.2, `python-multipart` 0.0.27 → 0.0.32. All are indirect (pulled via the MCP/fastmcp stack). Two advisories have no upstream fix and are left as-is: `PyPDF2` (unmaintained — the maintained successor is `pypdf`) and a low-severity `torch` advisory.
+
 ### Fixed
 - **Stdout pollution at runtime.** Routed the remaining `print()` calls that run during normal operation to stderr so they cannot corrupt the JSON-RPC stdio framing this server uses: the archival scheduler's status/error lines (`remember/scheduler.py`, via a new `_log` stderr helper), the archive-query error in `remember/system.py`, the memvid-encoding error in `remember/system.py`, and the file-search error in `remember/file_indexer.py` (now `logger.error`). Complements the v1.0.3 import-time stdout fix. (Verified via `py_compile` + a stdout-print sweep; full pytest suite not run locally — `memvid`/`openmemory` runtime deps absent in the dev shell.)
 
