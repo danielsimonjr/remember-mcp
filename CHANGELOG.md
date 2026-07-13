@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Windows CI leg.** CI ran on `ubuntu-latest` only — but Windows is the *production*
+  platform for this MCP server (it runs on Daniel's Windows box), so CI had never once
+  tested the OS the server actually ships on. The `test` job now runs a
+  `[ubuntu-latest, windows-latest]` matrix.
+
 ### Security
 - **Patched transitive dependency vulnerabilities** in `uv.lock`: `cryptography` 47.0.0 → 49.0.0 (HIGH), `starlette` 1.2.1 → 1.3.1 (HIGH), `pydantic-settings` 2.14.0 → 2.14.2, `python-multipart` 0.0.27 → 0.0.32. All are indirect (pulled via the MCP/fastmcp stack). Two advisories have no upstream fix and are left as-is: `PyPDF2` (unmaintained — the maintained successor is `pypdf`) and a low-severity `torch` advisory.
 
