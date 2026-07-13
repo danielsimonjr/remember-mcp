@@ -14,7 +14,23 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is the PRODUCTION platform for this MCP server (Daniel runs it
+        # locally on Windows), but CI was Linux-only — it never tested the OS the
+        # server actually ships on.
+        os: [ubuntu-latest, windows-latest]
+
+    # Run every `run:` step under bash on BOTH platforms. Windows would otherwise
+    # default to PowerShell, which cannot parse the bash idiom below
+    # (`pytest -q || [ $? -eq 5 ]`, which tolerates pytest's exit-5 "no tests
+    # collected") — it fails with a ParserError before any test runs.
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
