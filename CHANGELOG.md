@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- **11 high-severity Dependabot alerts closed with one targeted lock refresh.** Ten of the
+  eleven were the *same package* under different advisories: `pillow < 12.3.0` (→ 12.3.0),
+  plus `mcp < 1.28.1` (→ 1.29.0). Upgraded with
+  `uv lock --upgrade-package pillow --upgrade-package mcp` rather than a blanket re-lock,
+  so the blast radius stays reviewable.
+- **Lockfile had drifted from its own manifest.** `pyproject.toml` pins
+  `pydantic==2.13.4`, but `uv.lock` was resolving **2.11.7**. The refresh corrected it
+  (and `pydantic-core` 2.33.2 → 2.46.4). Worth noting because a lock that disagrees with
+  its manifest means *nobody was running the versions the manifest claims*.
+
+### Fixed
+
+- **CI could not have caught a dependency regression — now it can.** The `test` job ran
+  `python -m compileall -q .` and nothing else: a **syntax gate**, guarding a repo with
+  seven `test_*.py` files. The comment justifying this cited `faiss-cpu==1.7.4` /
+  `numpy==1.26.4` having no cp313 wheels and `memvid` being an archived PyPI package
+  capped at 0.1.3.
+  **All three premises had expired.** `memvid` now resolves to `danielsimonjr/memvid`
+  @ v0.2.0 over **git** (not PyPI), which pulls `faiss-cpu 1.13.2` and `numpy 2.4.4` —
+  both shipping cp313 wheels. Proven before changing CI: `uv sync` completed on
+  3.13.14 and `pytest` ran green. CI now installs with `uv sync --frozen` and runs
+  `pytest`, with `compileall` retained as a fast pre-check.
+  *The gate was honest when written and quietly went obsolete when the blocker was
+  fixed elsewhere — nothing re-checked it.*
+
+### Known gaps
+
+- **Only 4 of the 7 `test_*.py` files contain any tests.** `test_file_indexing.py`,
+  `test_tools.py` and `test_tools_async.py` are manual demo scripts (`async def main()`
+  + `print()` + `if __name__ == "__main__"`); pytest collects **0** from them. They
+  assert nothing and the `test_` prefix is cosmetic. The four real tests now run in CI;
+  converting or renaming the other three is tracked separately.
+
 ### Added
 
 - **Windows CI leg.** CI ran on `ubuntu-latest` only — but Windows is the *production*

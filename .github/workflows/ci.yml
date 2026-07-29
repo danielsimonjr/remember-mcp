@@ -36,10 +36,21 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
-      # Syntax gate only. A full install + pytest is NOT possible in CI: the repo
-      # pins requires-python==3.13.* but depends (transitively, via memvid) on
-      # faiss-cpu==1.7.4 / numpy==1.26.4, which have no cp313 wheels (cp311 max),
-      # and `memvid>=0.1.4` is not published on PyPI (tops out at 0.1.3). memvid
-      # is archived, so its pins can't be fixed here. See CHANGELOG / issue tracker.
-      # compileall byte-compiles every module so a syntax regression still fails CI.
+      # Kept as a fast fail: byte-compiles every module, so a syntax regression
+      # dies in seconds instead of after the (large) dependency install below.
       - run: python -m compileall -q .
+
+      # The old "a full install is NOT possible in CI" constraint is GONE. It cited
+      # faiss-cpu==1.7.4 / numpy==1.26.4 (no cp313 wheels) and memvid being an
+      # archived PyPI package capped at 0.1.3. All three premises expired: memvid
+      # now resolves to danielsimonjr/memvid @ v0.2.0 over git, which pulls
+      # faiss-cpu 1.13.2 and numpy 2.4.4 — both of which ship cp313 wheels.
+      # Verified by `uv sync` succeeding on 3.13.14 before this change landed.
+      #
+      # This matters: the repo has real tests that had NEVER run in CI, so a
+      # dependency regression could not be detected by the syntax gate alone.
+      - run: pip install --disable-pip-version-check uv
+      - run: uv sync --frozen
+      # `|| [ $? -eq 5 ]` tolerates pytest's exit-5 ("no tests collected") — this
+      # is the bash idiom the `defaults.run.shell: bash` above exists for.
+      - run: uv run pytest -q || [ $? -eq 5 ]
