@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security — cryptography 49.0.0 -> 50.0.0 (2026-08-04)
+
+High-severity alert raised minutes after the setuptools/torch push. Cleared with
+`uv lock --upgrade-package cryptography`; `pyproject.toml` unchanged. Same
+reasoning as below: CI's `uv sync --frozen` + `pytest` across the OS matrix is
+the verification, not a multi-GB local sync.
+
 ### Security — setuptools and torch (2026-08-04)
 
 Both open alerts cleared via `uv lock --upgrade-package`; `pyproject.toml`
