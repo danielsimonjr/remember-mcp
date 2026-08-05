@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security — setuptools and torch (2026-08-04)
+
+Both open alerts cleared via `uv lock --upgrade-package`; `pyproject.toml`
+unchanged.
+
+- `setuptools` 81.0.0 -> 83.0.0 (medium)
+- `torch` 2.12.1 -> 2.13.0 (low), pulled in transitively by
+  `sentence-transformers` — it is neither declared in `pyproject.toml` nor
+  imported anywhere in `src/`
+
+The torch bump also carried `cuda-toolkit` 13.0.2 -> 13.0.3.0 and
+`nvidia-cublas` 13.1.0.3 -> 13.1.1.3, which are torch's own pinned CUDA stack.
+
+Verification is deliberately left to CI rather than done locally: syncing this
+lock means a multi-GB torch/CUDA download, and CI already runs
+`uv sync --frozen` followed by `uv run pytest -q` across the OS matrix on
+Python 3.13 — which exercises the resolved lock more thoroughly than a single
+local machine would.
+
+
 ### Security
 
 - **11 high-severity Dependabot alerts closed with one targeted lock refresh.** Ten of the
