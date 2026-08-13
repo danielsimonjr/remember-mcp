@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security — pypdf 6.14.2 -> 6.15.0 (2026-08-13)
+
+Two medium advisories, both the same package. `pypdf` is transitive: it arrives through
+`memvid@0.2.0`, which this project consumes as a **git dependency** rather than from PyPI.
+
+`uv lock --upgrade-package pypdf` moved it without touching anything else — verified from
+the diff rather than the command's summary line: the change is exactly three lines, the
+version and its wheel hashes, and no second package appears. (A local `uv sync` also moved
+torch 2.12.1 -> 2.13.0, which is the *virtualenv* catching up to a lock entry that was
+already 2.13.0, not part of this change.)
+
+Gate matches CI (`uv sync --frozen`, `uv run pytest -q`): 4 passed.
+
 ### Security — cryptography 49.0.0 -> 50.0.0 (2026-08-04)
 
 High-severity alert raised minutes after the setuptools/torch push. Cleared with
