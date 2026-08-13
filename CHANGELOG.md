@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-13
+
+Rolls up every change since `v1.0.3` — a long run of security work that had never been
+tagged. Minor rather than patch because `fastmcp` crossed a **major** boundary (2.x -> 3.4.2)
+under the entries below, which changes the server's runtime, not just its dependency pins.
+
+### Removed — the vestigial `setup.py`
+
+`setup.py` was dead weight that actively contradicted the real metadata, and had drifted
+unnoticed for three releases. Every field disagreed with `pyproject.toml`:
+
+| Field | `setup.py` claimed | `pyproject.toml` (authoritative) |
+|---|---|---|
+| `version` | `1.0.0` | `1.0.3` — stale by 3 releases |
+| `python_requires` | `>=3.8` | `==3.13.*` |
+| `mcp` | `>=0.9.0` | `>=1.23.0` |
+| `fastmcp` | *absent entirely* | `>=3.2.0` |
+| `numpy` | `>=1.24.0` | `>=2.0` |
+
+Its `console_scripts` entry point pointed at `remember.mcp.server:main` — **a module that
+does not exist**; the package is flat (`remember/{__init__,file_indexer,scheduler,system,
+types}.py`). Nothing references the file. Under PEP 621 the `[project]` table is
+authoritative and setuptools ignores the duplicated `setup()` metadata, so this was a second
+"source of truth" that could only ever be wrong. Deleted rather than synced: keeping two
+version sources is the defect, and syncing them just re-arms it.
+
+> **Note for the next release:** `uv.lock` records the project's **own** version
+> (`[[package]] name = "remember-mcp"`). CI runs `uv sync --frozen`, so bumping
+> `pyproject.toml` without re-running `uv lock` fails the build. Bump and re-lock together.
+
 ### Security — pypdf 6.14.2 -> 6.15.0 (2026-08-13)
 
 Two medium advisories, both the same package. `pypdf` is transitive: it arrives through
