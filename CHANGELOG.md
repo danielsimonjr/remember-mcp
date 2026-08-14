@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added — architecture documentation, gated against drift
+
+`docs/architecture/` now carries the ten canonical documents (OVERVIEW, ARCHITECTURE,
+COMPONENTS, DATAFLOW, API, FILE_INVENTORY, TEST_COVERAGE, DEPENDENCY_GRAPH,
+unused-analysis, duplicate-symbols), and README links them.
+
+Every numeric claim is derived from a parse of the code and re-checked by
+`repo_map.py check`, which exits non-zero on a stale value. **Mutation-verified**: editing
+`totalLinesOfCode` to a wrong number makes the gate fail and name the drifted claim.
+
+This required teaching the tool Python first — `repo_map` was JavaScript/TypeScript only
+and reported this repo as an empty graph, so there was no gate to write against. That work
+landed in `danielsimonjr/skills` (a Python resolver, an `ast`-based parser, per-repo
+language detection that leaves every existing TS repo untouched, and Python entry-root
+detection). Claims the gate cannot hold — the 13 MCP tools, the 10 collected tests — are
+written with their actual basis stated rather than given a fake Verification row.
+
+Findings recorded while writing, not discarded:
+
+- `example.py` is the repo's only no-importer file — correct for a demo script, not a
+  deletion candidate (confirmed by grep as a second method).
+- All 5 "unused" exports are accounted for: two module loggers, one documented constant,
+  and two entry points reached by a runtime rather than an import.
+- `logger` is the single duplicate symbol (two module-local loggers) — benign.
+- `server.py`'s three internal edges each appear twice, because the imports are deliberately
+  made both lazily and under `TYPE_CHECKING` to keep heavy imports out of module scope.
+
+
 ## [1.1.1] - 2026-08-13
 
 Two crash/data-visibility bugs in the core memory path, plus the reason neither

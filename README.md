@@ -6,6 +6,25 @@ remember-mcp integrates:
 - **[openmemory-python](https://github.com/danielsimonjr/openmemory-python)** - Active memory with cognitive sectors and decay
 - **[memvid](https://github.com/danielsimonjr/memvid)** - QR-encoded video storage for memories and files
 
+## Documentation
+
+Full architecture documentation lives in [`docs/architecture/`](docs/architecture/). Every
+numeric claim in it is derived from a parse of the code and re-checked by a drift gate
+(`repo_map.py check`), so a stale number fails rather than misleads.
+
+| Document | Answers |
+|---|---|
+| [OVERVIEW.md](docs/architecture/OVERVIEW.md) | What this is, what it does, the numbers |
+| [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Why it is built this way, and the decisions the runtime forced |
+| [COMPONENTS.md](docs/architecture/COMPONENTS.md) | Each module, with real signatures |
+| [DATAFLOW.md](docs/architecture/DATAFLOW.md) | How a request travels end to end |
+| [API.md](docs/architecture/API.md) | The full MCP and Python surface |
+| [FILE_INVENTORY.md](docs/architecture/FILE_INVENTORY.md) | Every file and its disposition |
+| [TEST_COVERAGE.md](docs/architecture/TEST_COVERAGE.md) | What is tested, and the gaps that matter |
+| [DEPENDENCY_GRAPH.md](docs/architecture/DEPENDENCY_GRAPH.md) | Who imports whom |
+| [unused-analysis.md](docs/architecture/unused-analysis.md) | Files and exports with no importer |
+| [duplicate-symbols.md](docs/architecture/duplicate-symbols.md) | Names defined more than once |
+
 ## Architecture
 
 ### Hybrid Storage Model
