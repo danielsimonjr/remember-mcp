@@ -38,5 +38,5 @@ Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_m
 
 | Claim | Value | Source |
 |---|---|---|
-| totalTypeScriptFiles | 15 | dependency-graph.json |
+| totalTypeScriptFiles | 18 | dependency-graph.json |
 | totalExports | 31 | dependency-graph.json |

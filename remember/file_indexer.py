@@ -2,20 +2,49 @@
 File Indexer for remember-mcp
 Extends memvid to support file indexing with metadata tracking
 """
-import os
-import json
-import hashlib
-import logging
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+from __future__ import annotations
 
-try:
-    from memvid import MemvidEncoder, MemvidRetriever
-except ImportError:
-    raise ImportError("memvid not found. Install with: pip install memvid")
+import contextlib
+import hashlib
+import json
+import logging
+import os
+import sys
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from .video import RetrieverCache, encode_chunks, make_encoder, search_with_scores
 
 logger = logging.getLogger(__name__)
+
+MAX_FILE_BYTES = 32 * 1024 * 1024
+MAX_DIRECTORY_FILES = 500
+MAX_QUERY_K = 100
+MIN_CHUNK_SIZE = 32
+MAX_CHUNK_SIZE = 1_000_000
+_DEFAULT_EXCLUDES = (".git", "__pycache__", "node_modules", ".pyc", ".mp4", ".mp3")
+_CODE_TYPES = frozenset({"python", "javascript", "typescript", "java", "cpp", "c"})
+_TYPE_MAP = {
+    ".py": "python",
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".java": "java",
+    ".cpp": "cpp",
+    ".c": "c",
+    ".h": "header",
+    ".md": "markdown",
+    ".txt": "text",
+    ".pdf": "pdf",
+    ".epub": "epub",
+    ".html": "html",
+    ".css": "css",
+    ".json": "json",
+    ".xml": "xml",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+}
 
 
 def _get_allowed_index_roots() -> List[Path]:
@@ -63,6 +92,10 @@ def _is_dotfile_path(path: Path) -> bool:
     return False
 
 
+def _looks_binary(sample: bytes) -> bool:
+    return b"\x00" in sample
+
+
 class FileIndexer:
     """
     File indexing system using memvid for QR-encoded video storage.
@@ -79,6 +112,8 @@ class FileIndexer:
         self,
         index_dir: str = "file_index/",
         allowed_roots: Optional[List[str]] = None,
+        max_file_bytes: int = MAX_FILE_BYTES,
+        max_directory_files: int = MAX_DIRECTORY_FILES,
     ):
         """
         Initialize FileIndexer
@@ -89,9 +124,13 @@ class FileIndexer:
                 which files/dirs may be indexed. If ``None``, falls back to
                 the ``REMEMBER_INDEX_ROOTS`` env var (comma-separated), and
                 ultimately to ``~/Documents``.
+            max_file_bytes: Refuse to index a single file larger than this.
+            max_directory_files: Cap on files processed per ``index_directory``.
         """
         self.index_dir = Path(index_dir)
         self.index_dir.mkdir(parents=True, exist_ok=True)
+        self.max_file_bytes = max_file_bytes
+        self.max_directory_files = max_directory_files
 
         if allowed_roots is not None:
             self.allowed_roots = [Path(p).expanduser().resolve() for p in allowed_roots]
@@ -101,6 +140,7 @@ class FileIndexer:
         # File metadata database: maps file_hash -> metadata
         self.metadata_file = self.index_dir / "file_metadata.json"
         self.metadata: Dict[str, Dict[str, Any]] = self._load_metadata()
+        self._lock = threading.RLock()
 
         # Master index for all files
         self.master_video = self.index_dir / "master_index.mp4"
@@ -108,7 +148,7 @@ class FileIndexer:
 
         # Cache MemvidRetriever instances by (video_path, index_path) so we
         # don't reload the FAISS index + reopen the mp4 reader on every search.
-        self._retriever_cache: Dict[Tuple[str, str], Any] = {}
+        self._retriever_cache = RetrieverCache()
 
     def _get_retriever(self, video_path: str, index_path: str) -> Any:
         """
@@ -116,76 +156,99 @@ class FileIndexer:
         pair. Caching avoids reloading the FAISS index and reopening the mp4
         reader on every search call.
         """
-        key = (video_path, index_path)
-        retriever = self._retriever_cache.get(key)
-        if retriever is None:
-            retriever = MemvidRetriever(
-                video_file=video_path,
-                index_file=index_path,
-            )
-            self._retriever_cache[key] = retriever
-        return retriever
+        return self._retriever_cache.get(video_path, index_path)
 
     def close(self) -> None:
         """Release cached MemvidRetriever instances (FAISS indexes + mp4
         readers). Safe to call multiple times.
         """
-        for key, retriever in list(self._retriever_cache.items()):
-            close_fn = getattr(retriever, "close", None)
-            try:
-                if callable(close_fn):
-                    close_fn()
-                else:
-                    clear_fn = getattr(retriever, "clear_cache", None)
-                    if callable(clear_fn):
-                        clear_fn()
-            except Exception as e:  # noqa: BLE001 — defensive cleanup
-                logger.warning("Error closing retriever %s: %s", key, e)
-        self._retriever_cache.clear()
+        self._retriever_cache.close()
 
     def _load_metadata(self) -> Dict[str, Dict[str, Any]]:
-        """Load file metadata from disk"""
-        if self.metadata_file.exists():
-            with open(self.metadata_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return {}
+        """Load file metadata from disk. A corrupt file is quarantined rather
+        than crashing indexer construction — the MCP server must still boot.
+        """
+        if not self.metadata_file.exists():
+            return {}
+        try:
+            with open(self.metadata_file, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            backup = self.metadata_file.with_suffix(".json.corrupt")
+            try:
+                os.replace(self.metadata_file, backup)
+                logger.error(
+                    "Corrupt file metadata at %s (%s); moved to %s",
+                    self.metadata_file,
+                    exc,
+                    backup,
+                )
+            except OSError:
+                logger.error("Corrupt file metadata at %s: %s", self.metadata_file, exc)
+            return {}
+        if not isinstance(data, dict):
+            logger.error("File metadata is not an object; starting empty")
+            return {}
+        return data
 
     def _save_metadata(self) -> None:
-        """Save file metadata to disk"""
-        with open(self.metadata_file, 'w', encoding='utf-8') as f:
-            json.dump(self.metadata, f, indent=2)
+        """Atomic replace so a crash mid-write cannot leave a half JSON file."""
+        tmp = self.metadata_file.with_suffix(".json.tmp")
+        payload = json.dumps(self.metadata, separators=(",", ":"), ensure_ascii=False)
+        with open(tmp, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, self.metadata_file)
 
     def _compute_file_hash(self, file_path: str) -> str:
         """Compute SHA256 hash of file"""
         sha256 = hashlib.sha256()
-        with open(file_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(8192), b''):
+        with open(file_path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                 sha256.update(chunk)
         return sha256.hexdigest()
 
     def _get_file_type(self, file_path: str) -> str:
         """Determine file type from extension"""
         ext = Path(file_path).suffix.lower()
-        type_map = {
-            '.py': 'python',
-            '.js': 'javascript',
-            '.ts': 'typescript',
-            '.java': 'java',
-            '.cpp': 'cpp',
-            '.c': 'c',
-            '.h': 'header',
-            '.md': 'markdown',
-            '.txt': 'text',
-            '.pdf': 'pdf',
-            '.epub': 'epub',
-            '.html': 'html',
-            '.css': 'css',
-            '.json': 'json',
-            '.xml': 'xml',
-            '.yaml': 'yaml',
-            '.yml': 'yaml',
-        }
-        return type_map.get(ext, 'unknown')
+        return _TYPE_MAP.get(ext, "unknown")
+
+    @staticmethod
+    def _validate_chunking(chunk_size: int, overlap: int) -> tuple[int, int]:
+        if not isinstance(chunk_size, int) or isinstance(chunk_size, bool):
+            raise ValueError("chunk_size must be an integer")
+        if chunk_size < MIN_CHUNK_SIZE or chunk_size > MAX_CHUNK_SIZE:
+            raise ValueError(
+                f"chunk_size must be between {MIN_CHUNK_SIZE} and {MAX_CHUNK_SIZE}"
+            )
+        if not isinstance(overlap, int) or isinstance(overlap, bool) or overlap < 0:
+            raise ValueError("overlap must be a non-negative integer")
+        if overlap >= chunk_size:
+            raise ValueError("overlap must be smaller than chunk_size")
+        return chunk_size, overlap
+
+    def _enforce_path_policy(
+        self,
+        resolved: Path,
+        index_dotfiles: bool,
+        must_exist_as: Optional[str] = None,
+    ) -> None:
+        if not _is_within_allowed_roots(resolved, self.allowed_roots):
+            raise PermissionError(
+                f"Refusing to index path outside allowed roots: {resolved}. "
+                f"Allowed roots: {[str(r) for r in self.allowed_roots]}. "
+                f"Configure via REMEMBER_INDEX_ROOTS env var."
+            )
+        if not index_dotfiles and _is_dotfile_path(resolved):
+            raise PermissionError(
+                f"Refusing to index dotfile: {resolved}. "
+                f"Pass index_dotfiles=True to override."
+            )
+        if must_exist_as == "file" and not resolved.is_file():
+            raise FileNotFoundError(f"File not found: {resolved}")
+        if must_exist_as == "dir" and not resolved.is_dir():
+            raise FileNotFoundError(f"Directory not found: {resolved}")
 
     def index_file(
         self,
@@ -214,106 +277,131 @@ class FileIndexer:
             PermissionError: If ``file_path`` resolves outside the configured
                 allow-list, or is a dotfile and ``index_dotfiles`` is False.
         """
-        file_path = os.path.abspath(file_path)
-        resolved = Path(file_path).resolve()
+        chunk_size, overlap = self._validate_chunking(chunk_size, overlap)
+        resolved = Path(file_path).expanduser().resolve()
+        self._enforce_path_policy(resolved, index_dotfiles, must_exist_as="file")
 
-        # Security: enforce allow-list before opening anything
-        if not _is_within_allowed_roots(resolved, self.allowed_roots):
+        file_size = resolved.stat().st_size
+        if file_size > self.max_file_bytes:
             raise PermissionError(
-                f"Refusing to index path outside allowed roots: {file_path}. "
-                f"Allowed roots: {[str(r) for r in self.allowed_roots]}. "
-                f"Configure via REMEMBER_INDEX_ROOTS env var."
+                f"Refusing to index file larger than {self.max_file_bytes} bytes: "
+                f"{resolved} ({file_size} bytes)"
             )
 
-        # Security: reject dotfiles unless explicitly opted-in
-        if not index_dotfiles and _is_dotfile_path(resolved):
-            raise PermissionError(
-                f"Refusing to index dotfile: {file_path}. "
-                f"Pass index_dotfiles=True to override."
-            )
+        file_hash = self._compute_file_hash(str(resolved))
+        file_type = self._get_file_type(str(resolved))
 
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-
-        # Compute file hash
-        file_hash = self._compute_file_hash(file_path)
-        file_type = self._get_file_type(file_path)
-        file_size = os.path.getsize(file_path)
-
-        # Check if already indexed
-        if file_hash in self.metadata:
-            existing = self.metadata[file_hash]
-            if existing['file_path'] == file_path:
+        with self._lock:
+            existing = self.metadata.get(file_hash)
+            if existing:
+                # Same bytes, whatever the path: do not overwrite the original
+                # entry (that used to drop the first path when two files
+                # hashed identically).
                 return {
                     "status": "already_indexed",
-                    "file_path": file_path,
+                    "file_path": existing.get("file_path", str(resolved)),
                     "file_hash": file_hash,
-                    "indexed_at": existing['indexed_at']
+                    "indexed_at": existing.get("indexed_at"),
                 }
 
-        # Create encoder
-        encoder = MemvidEncoder()
+        chunks_meta: List[Dict[str, Any]] = []
+        encoder = None
+        chunk_count = 0
 
-        # Add file content based on type
-        chunks_meta = []
-
-        if file_type == 'pdf':
-            encoder.add_pdf(file_path, chunk_size=chunk_size, overlap=overlap)
-            # For PDFs, chunks are created by memvid
+        if file_type == "pdf":
+            encoder = make_encoder()
+            encoder.add_pdf(str(resolved), chunk_size=chunk_size, overlap=overlap)
             chunk_count = len(encoder.chunks)
-
-        elif file_type == 'epub':
-            encoder.add_epub(file_path, chunk_size=chunk_size, overlap=overlap)
+        elif file_type == "epub":
+            encoder = make_encoder()
+            encoder.add_epub(str(resolved), chunk_size=chunk_size, overlap=overlap)
             chunk_count = len(encoder.chunks)
-
         else:
-            # Text-based files: read and optionally preserve line numbers
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
+            with open(resolved, "rb") as handle:
+                data = handle.read()
+            if _looks_binary(data[:8192]):
+                raise PermissionError(
+                    f"Refusing to index binary file as text: {resolved}"
+                )
+            try:
+                content = data.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise PermissionError(
+                    f"Refusing to index non-UTF-8 file: {resolved}"
+                ) from exc
 
-            if preserve_lines and file_type in ['python', 'javascript', 'typescript', 'java', 'cpp', 'c']:
-                # Add line numbers to chunks for code files
-                lines = content.split('\n')
-                chunks_with_lines = []
-
-                for i in range(0, len(lines), chunk_size // 50):  # Approx 50 chars per line
-                    chunk_lines = lines[i:i + (chunk_size // 50)]
-                    start_line = i + 1
-                    end_line = min(i + len(chunk_lines), len(lines))
-
-                    # Format: [file:start-end]\n<content>
-                    chunk_text = f"[{Path(file_path).name}:{start_line}-{end_line}]\n"
-                    chunk_text += '\n'.join(chunk_lines)
-
-                    chunks_with_lines.append(chunk_text)
-                    chunks_meta.append({
-                        "start_line": start_line,
-                        "end_line": end_line,
-                        "char_start": sum(len(l) + 1 for l in lines[:i]),
-                        "char_end": sum(len(l) + 1 for l in lines[:end_line])
-                    })
-
-                encoder.add_chunks(chunks_with_lines)
+            if preserve_lines and file_type in _CODE_TYPES:
+                chunks_with_lines, chunks_meta = _chunk_code_with_lines(
+                    content, Path(resolved).name, chunk_size
+                )
                 chunk_count = len(chunks_with_lines)
-            else:
-                # Regular text chunking
-                encoder.add_text(content, chunk_size=chunk_size, overlap=overlap)
-                chunk_count = len(encoder.chunks)
+                video_path = self.index_dir / f"{file_hash}.mp4"
+                index_path = self.index_dir / f"{file_hash}.json"
+                stats = encode_chunks(chunks_with_lines, video_path, index_path)
+                return self._record_index(
+                    resolved=resolved,
+                    file_hash=file_hash,
+                    file_type=file_type,
+                    file_size=file_size,
+                    chunk_count=chunk_count,
+                    chunk_size=chunk_size,
+                    overlap=overlap,
+                    video_path=video_path,
+                    index_path=index_path,
+                    chunks_meta=chunks_meta,
+                    stats=stats,
+                )
+            encoder = make_encoder()
+            encoder.add_text(content, chunk_size=chunk_size, overlap=overlap)
+            chunk_count = len(encoder.chunks)
 
-        # Build video for this file
+        if chunk_count == 0:
+            raise ValueError(f"No indexable content in {resolved}")
+
         video_path = self.index_dir / f"{file_hash}.mp4"
         index_path = self.index_dir / f"{file_hash}.json"
 
-        stats = encoder.build_video(
-            output_file=str(video_path),
-            index_file=str(index_path),
-            show_progress=False
+        with contextlib.redirect_stdout(sys.stderr):
+            stats = encoder.build_video(
+                output_file=str(video_path),
+                index_file=str(index_path),
+                show_progress=False,
+            )
+
+        return self._record_index(
+            resolved=resolved,
+            file_hash=file_hash,
+            file_type=file_type,
+            file_size=file_size,
+            chunk_count=chunk_count,
+            chunk_size=chunk_size,
+            overlap=overlap,
+            video_path=video_path,
+            index_path=index_path,
+            chunks_meta=chunks_meta,
+            stats=stats,
         )
 
-        # Store metadata
+    def _record_index(
+        self,
+        *,
+        resolved: Path,
+        file_hash: str,
+        file_type: str,
+        file_size: int,
+        chunk_count: int,
+        chunk_size: int,
+        overlap: int,
+        video_path: Path,
+        index_path: Path,
+        chunks_meta: List[Dict[str, Any]],
+        stats: Any,
+    ) -> Dict[str, Any]:
+        if not isinstance(stats, dict):
+            stats = {}
         metadata = {
-            "file_path": file_path,
-            "file_name": os.path.basename(file_path),
+            "file_path": str(resolved),
+            "file_name": resolved.name,
             "file_hash": file_hash,
             "file_type": file_type,
             "file_size": file_size,
@@ -322,21 +410,22 @@ class FileIndexer:
             "overlap": overlap,
             "video_path": str(video_path),
             "index_path": str(index_path),
-            "chunks_meta": chunks_meta if chunks_meta else None,
-            "indexed_at": datetime.now().isoformat(),
-            "stats": stats
+            "chunks_meta": chunks_meta or None,
+            "indexed_at": datetime.now(timezone.utc).isoformat(),
+            "stats": stats,
         }
-
-        self.metadata[file_hash] = metadata
-        self._save_metadata()
-
+        with self._lock:
+            self.metadata[file_hash] = metadata
+            self._save_metadata()
         return {
             "status": "indexed",
-            "file_path": file_path,
+            "file_path": str(resolved),
             "file_hash": file_hash,
             "chunk_count": chunk_count,
-            "video_size": stats.get('video_size', 0),
-            "compression_ratio": stats.get('compression_ratio', 0)
+            "video_size": stats.get("video_size", 0) or int(
+                stats.get("video_size_mb", 0) * 1024 * 1024
+            ),
+            "compression_ratio": stats.get("compression_ratio", 0),
         }
 
     def index_directory(
@@ -366,59 +455,76 @@ class FileIndexer:
             PermissionError: If ``dir_path`` resolves outside the configured
                 allow-list.
         """
-        dir_path = Path(dir_path)
-        resolved_dir = dir_path.resolve()
+        chunk_size, overlap = self._validate_chunking(chunk_size, overlap)
+        resolved_dir = Path(dir_path).expanduser().resolve()
+        self._enforce_path_policy(resolved_dir, index_dotfiles, must_exist_as="dir")
 
-        # Security: enforce allow-list before walking anything
-        if not _is_within_allowed_roots(resolved_dir, self.allowed_roots):
-            raise PermissionError(
-                f"Refusing to index directory outside allowed roots: {dir_path}. "
-                f"Allowed roots: {[str(r) for r in self.allowed_roots]}. "
-                f"Configure via REMEMBER_INDEX_ROOTS env var."
-            )
+        # Copy so a caller-supplied list is not mutated (the previous
+        # ``exclude.extend(defaults)`` modified the MCP argument in place).
+        exclude_patterns = list(_DEFAULT_EXCLUDES)
+        if exclude:
+            exclude_patterns.extend(exclude)
 
-        if not dir_path.exists():
-            raise FileNotFoundError(f"Directory not found: {dir_path}")
+        indexed: List[Dict[str, Any]] = []
+        skipped: List[str] = []
+        errors: List[Dict[str, str]] = []
+        considered = 0
 
-        exclude = exclude or []
-        exclude_patterns = ['.git', '__pycache__', 'node_modules', '.pyc', '.mp4', '.mp3']
-        exclude.extend(exclude_patterns)
-
-        indexed = []
-        skipped = []
-        errors = []
-
-        for file_path in dir_path.glob(pattern):
+        for file_path in resolved_dir.glob(pattern):
             if not file_path.is_file():
                 continue
+            try:
+                resolved_file = file_path.resolve()
+            except OSError as exc:
+                errors.append({"file": str(file_path), "error": str(exc)})
+                continue
 
-            # Check exclusions
-            if any(excl in str(file_path) for excl in exclude):
+            # Confine glob results to the requested directory. pathlib glob
+            # of ``../**`` can otherwise walk *out* of dir_path.
+            try:
+                if not resolved_file.is_relative_to(resolved_dir):
+                    skipped.append(str(file_path))
+                    continue
+            except (ValueError, OSError):
                 skipped.append(str(file_path))
                 continue
 
-            # Security: skip dotfiles unless explicitly opted-in
-            if not index_dotfiles and _is_dotfile_path(file_path.resolve()):
+            if any(excl in str(resolved_file) for excl in exclude_patterns):
                 skipped.append(str(file_path))
                 continue
+
+            if not index_dotfiles and _is_dotfile_path(resolved_file):
+                skipped.append(str(file_path))
+                continue
+
+            considered += 1
+            if considered > self.max_directory_files:
+                errors.append({
+                    "file": str(resolved_dir),
+                    "error": (
+                        f"Stopped after {self.max_directory_files} files "
+                        f"(max_directory_files). Narrow the glob or raise the cap."
+                    ),
+                })
+                break
 
             try:
                 result = self.index_file(
-                    str(file_path),
+                    str(resolved_file),
                     chunk_size=chunk_size,
                     overlap=overlap,
                     index_dotfiles=index_dotfiles,
                 )
                 indexed.append(result)
-            except Exception as e:
-                errors.append({"file": str(file_path), "error": str(e)})
+            except Exception as exc:  # noqa: BLE001 — per-file isolation
+                errors.append({"file": str(file_path), "error": str(exc)})
 
         return {
             "indexed_count": len(indexed),
             "skipped_count": len(skipped),
             "error_count": len(errors),
             "indexed_files": indexed,
-            "errors": errors
+            "errors": errors,
         }
 
     def search(
@@ -440,109 +546,110 @@ class FileIndexer:
         Returns:
             List of search results with file metadata
         """
-        results = []
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("query must be a non-empty string")
+        if not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 1 or top_k > MAX_QUERY_K:
+            raise ValueError(f"top_k must be an integer between 1 and {MAX_QUERY_K}")
 
-        # Search each indexed file
-        for file_hash, meta in self.metadata.items():
-            # Apply filters
-            if file_filter and file_filter not in meta['file_path']:
+        with self._lock:
+            snapshot = list(self.metadata.items())
+
+        results: List[Dict[str, Any]] = []
+
+        for file_hash, meta in snapshot:
+            if file_filter and file_filter not in meta["file_path"]:
                 continue
-            if file_type_filter and meta['file_type'] != file_type_filter:
+            if file_type_filter and meta["file_type"] != file_type_filter:
                 continue
 
-            video_path = meta['video_path']
-            index_path = meta['index_path']
+            video_path = meta["video_path"]
+            index_path = meta["index_path"]
 
             if not os.path.exists(video_path) or not os.path.exists(index_path):
                 continue
 
             try:
-                # Reuse cached retriever — FAISS index + mp4 reader would
-                # otherwise be reloaded on every search call (file-handle
-                # leak + slow).
                 retriever = self._get_retriever(
                     video_path=video_path,
                     index_path=index_path,
                 )
-
-                hits = retriever.search(query, top_k=top_k)
-
-                # Add file metadata to results
-                # Note: memvid search returns List[str], not List[Tuple[str, float]]
-                for idx, chunk in enumerate(hits):
-                    # Estimate score based on ranking (higher rank = higher score)
-                    estimated_score = 1.0 - (idx * 0.1)
-
-                    result = {
-                        "content": chunk,
-                        "score": estimated_score,
-                        "file_path": meta['file_path'],
-                        "file_name": meta['file_name'],
-                        "file_type": meta['file_type'],
-                        "file_hash": file_hash,
-                        "indexed_at": meta['indexed_at']
-                    }
-
-                    # Add line number if available (from chunk header)
-                    if chunk.startswith('[') and ']:' in chunk:
-                        header = chunk.split(']')[0] + ']'
-                        result["line_info"] = header
-
-                    results.append(result)
-
-            except Exception as e:
-                logger.error(f"Error searching {meta['file_path']}: {e}")
+                hits = search_with_scores(retriever, query, top_k)
+            except Exception as exc:  # noqa: BLE001 — one file must not fail the search
+                logger.error("Error searching %s: %s", meta.get("file_path"), exc)
                 continue
 
-        # Sort by score and return top_k
-        results.sort(key=lambda x: x['score'], reverse=True)
+            for chunk, score in hits:
+                result = {
+                    "content": chunk,
+                    "score": score,
+                    "file_path": meta["file_path"],
+                    "file_name": meta["file_name"],
+                    "file_type": meta["file_type"],
+                    "file_hash": file_hash,
+                    "indexed_at": meta["indexed_at"],
+                }
+                if isinstance(chunk, str) and chunk.startswith("[") and "]:" in chunk[:80]:
+                    header = chunk.split("]", 1)[0] + "]"
+                    result["line_info"] = header
+                results.append(result)
+
+        results.sort(key=lambda item: item["score"], reverse=True)
         return results[:top_k]
 
     def get_file_info(self, file_path: str) -> Optional[Dict[str, Any]]:
-        """Get metadata for an indexed file"""
-        file_path = os.path.abspath(file_path)
-        file_hash = self._compute_file_hash(file_path) if os.path.exists(file_path) else None
+        """Get metadata for an indexed file.
 
-        if file_hash and file_hash in self.metadata:
-            return self.metadata[file_hash]
-
-        # Search by path
-        for meta in self.metadata.values():
-            if meta['file_path'] == file_path:
-                return meta
-
+        Path lookup is tried first so a missing-on-disk (but previously
+        indexed) file still resolves, and so we don't hash a huge file just
+        to answer a metadata query.
+        """
+        resolved = str(Path(file_path).expanduser().resolve()) if file_path else ""
+        with self._lock:
+            for meta in self.metadata.values():
+                if meta.get("file_path") in (file_path, resolved):
+                    return meta
+            if resolved and os.path.isfile(resolved):
+                file_hash = self._compute_file_hash(resolved)
+                if file_hash in self.metadata:
+                    return self.metadata[file_hash]
         return None
 
     def list_indexed_files(self) -> List[Dict[str, Any]]:
         """List all indexed files"""
+        with self._lock:
+            snapshot = list(self.metadata.values())
         return [
             {
-                "file_path": meta['file_path'],
-                "file_name": meta['file_name'],
-                "file_type": meta['file_type'],
-                "file_size": meta['file_size'],
-                "chunk_count": meta['chunk_count'],
-                "indexed_at": meta['indexed_at']
+                "file_path": meta["file_path"],
+                "file_name": meta["file_name"],
+                "file_type": meta["file_type"],
+                "file_size": meta["file_size"],
+                "chunk_count": meta["chunk_count"],
+                "indexed_at": meta["indexed_at"],
             }
-            for meta in self.metadata.values()
+            for meta in snapshot
         ]
 
     def get_stats(self) -> Dict[str, Any]:
         """Get indexing statistics"""
-        total_files = len(self.metadata)
-        total_chunks = sum(m['chunk_count'] for m in self.metadata.values())
-        total_size = sum(m['file_size'] for m in self.metadata.values())
+        with self._lock:
+            snapshot = list(self.metadata.values())
+        total_files = len(snapshot)
+        total_chunks = sum(m.get("chunk_count") or 0 for m in snapshot)
+        total_size = sum(m.get("file_size") or 0 for m in snapshot)
 
-        # Video storage size
-        video_size = sum(
-            os.path.getsize(m['video_path'])
-            for m in self.metadata.values()
-            if os.path.exists(m['video_path'])
-        )
+        video_size = 0
+        for meta in snapshot:
+            video_path = meta.get("video_path")
+            if video_path and os.path.exists(video_path):
+                try:
+                    video_size += os.path.getsize(video_path)
+                except OSError as exc:
+                    logger.warning("Could not stat video %s: %s", video_path, exc)
 
-        file_types = {}
-        for meta in self.metadata.values():
-            ft = meta['file_type']
+        file_types: Dict[str, int] = {}
+        for meta in snapshot:
+            ft = meta.get("file_type") or "unknown"
             file_types[ft] = file_types.get(ft, 0) + 1
 
         return {
@@ -551,5 +658,37 @@ class FileIndexer:
             "total_source_size": total_size,
             "total_video_size": video_size,
             "compression_ratio": total_size / video_size if video_size > 0 else 0,
-            "file_types": file_types
+            "file_types": file_types,
         }
+
+
+def _chunk_code_with_lines(
+    content: str, filename: str, chunk_size: int
+) -> tuple[List[str], List[Dict[str, int]]]:
+    """Split code into line-preserving chunks in O(n), not O(n²).
+
+    The previous implementation recomputed ``sum(len(l)+1 for l in lines[:i])``
+    on every iteration.
+    """
+    lines = content.split("\n")
+    n_lines = len(lines)
+    step = max(1, chunk_size // 50)
+    offsets = [0] * (n_lines + 1)
+    for i, line in enumerate(lines):
+        offsets[i + 1] = offsets[i] + len(line) + 1
+
+    chunks: List[str] = []
+    meta: List[Dict[str, int]] = []
+    for start in range(0, n_lines, step):
+        end = min(start + step, n_lines)
+        start_line = start + 1
+        end_line = end
+        chunk_text = f"[{filename}:{start_line}-{end_line}]\n" + "\n".join(lines[start:end])
+        chunks.append(chunk_text)
+        meta.append({
+            "start_line": start_line,
+            "end_line": end_line,
+            "char_start": offsets[start],
+            "char_end": offsets[end],
+        })
+    return chunks, meta

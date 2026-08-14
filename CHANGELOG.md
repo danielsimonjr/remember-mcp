@@ -4,6 +4,100 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-14
+
+Speed, reliability, security, and maintainability pass. Several of these were
+load-bearing bugs that the previous suite could not see.
+
+### Fixed — archive search was a no-op
+
+`MemvidRetriever` takes `video_file` / `index_file`. The archive-query path
+passed `video_path` / `index_path`, which raises `TypeError`. The exception was
+swallowed per-archive, so hybrid search silently dropped every archived hit.
+It also unpacked `search()`'s `List[str]` as `(chunk, score)` tuples — memvid
+does not return scores from `search()`. Both are fixed: correct kwargs, and
+`search_with_metadata` for real scores. Mutation-covered by
+`test_query_reaches_archived_memories` and `tests/test_video.py`.
+
+### Fixed — `age_days=0` and `min_salience=0.0` were ignored
+
+`age_days or self.archive_threshold_days` treats `0` as missing, so an explicit
+"archive now" from the MCP tool fell back to the 60-day default. Same for
+`min_salience=0.0`. Defaults now apply only when the argument is `None`.
+
+### Fixed — recall of an unknown archive invented a memory
+
+`recall_from_archive` re-added `content` without checking that `archive_file`
+was a registered archive. An unknown name (or a path-traversal string) created
+a phantom active memory. Recall now resolves against the in-memory index only
+and raises `FileNotFoundError` otherwise.
+
+### Fixed — `SystemStats.archive_count` mixed files and memories
+
+`archive_count` counted archive *files*, so `total_memories = active_count +
+archive_count` was not conserved when N memories packed into one video. It is
+now a memory count (recovered from the memvid JSON sidecar after restart).
+`archive_file_count` is the file tally. `get_stats` exposes both.
+
+### Fixed — encoding froze the server and held the write lock
+
+`MemvidEncoder.build_video` ran on the event loop, inside `_write_lock`. Every
+`add_memory` blocked for the duration of QR encoding, and memvid's own
+`print("FRAMES: ...")` / ffmpeg summaries went to **stdout** — which is
+JSON-RPC. Encoding now runs in a worker thread, without the write lock (a
+separate `_archive_lock` serializes archival), with stdout redirected, Docker
+disabled, and partial `.mp4`/`.json`/`.faiss` files removed on failure.
+
+### Fixed — file-index stdio, glob escape, metadata races
+
+- `FileIndexer` imported memvid with no stdout isolation (same JSON-RPC hazard).
+- `Path.glob("../**")` could walk *out* of the requested directory; each file
+  is now confined to that directory *and* the allow-list.
+- `index_directory(exclude=...)` mutated the caller's list in place.
+- Metadata JSON was written non-atomically; a crash left a half file that
+  then crashed the next boot. Writes are `tmp` + `os.replace`; corrupt files
+  are quarantined.
+- Identical content at two paths overwrote the first path's metadata.
+- Line-preserving chunk offsets were O(n²).
+
+### Security
+
+- Per-file size cap (32 MiB) and per-directory file cap (500).
+- Binary / non-UTF-8 files refused (no more `errors='ignore'` on secrets in
+  binaries).
+- MCP tools validate empty content, `k`/`top_k` bounds, chunk_size/overlap,
+  and unknown scheduler actions; they return `{"error": ...}` rather than
+  raising through the protocol.
+- `memvid` is pinned to a git **rev** (`1deb9b29…`) instead of `branch = main`,
+  so `uv lock` cannot silently pick up a new main.
+
+### Speed / stability
+
+- SQLite WAL + busy_timeout on the openmemory connection.
+- `get_stats` is one `COUNT`/`AVG` query instead of two.
+- Archive search fans out per-video in worker threads.
+- Retriever cache is a bounded LRU (32), not unbounded process-lifetime growth.
+- `SELECT id, content` for eligibility, not `SELECT *` (skips embedding blobs).
+- `get_file_info` looks up by path before hashing.
+
+### Tests / CI / maintainability
+
+- `tests/test_complete.py` was collected as `test_phase2` with **zero
+  assertions** and wrote `test_phase2.db` into the working directory. It is
+  now a real scheduler test in `tmp_path`.
+- `tests/test_file_indexing.py` collected nothing; `FileIndexer` now has
+  allow-list, glob, binary, size, metadata, and round-trip tests.
+- CI no longer treats pytest exit 5 ("no tests collected") as success.
+- `remember.__version__` was `1.0.0` against `pyproject.toml` `1.1.1`; both
+  are `1.2.0` and pinned to each other.
+- Dead `schedule` dependency removed (the scheduler is asyncio).
+- Shared memvid helpers live in `remember/video.py` so the two call sites
+  cannot drift on constructor names or stdout isolation again.
+
+The architecture documents in `docs/architecture/` from the previous
+unreleased work are included in this release and updated for the new module
+and the closed `archive_count` debt.
+
 ### Added — architecture documentation, gated against drift
 
 `docs/architecture/` now carries the ten canonical documents (OVERVIEW, ARCHITECTURE,
@@ -18,7 +112,7 @@ This required teaching the tool Python first — `repo_map` was JavaScript/TypeS
 and reported this repo as an empty graph, so there was no gate to write against. That work
 landed in `danielsimonjr/skills` (a Python resolver, an `ast`-based parser, per-repo
 language detection that leaves every existing TS repo untouched, and Python entry-root
-detection). Claims the gate cannot hold — the 13 MCP tools, the 10 collected tests — are
+detection). Claims the gate cannot hold — the 13 MCP tools, the 29 collected tests — are
 written with their actual basis stated rather than given a fake Verification row.
 
 Findings recorded while writing, not discarded:

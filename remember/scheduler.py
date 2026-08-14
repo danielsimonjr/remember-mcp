@@ -2,20 +2,14 @@
 Automatic archival scheduler for remember-mcp
 Runs background task to archive old/decayed memories
 """
+from __future__ import annotations
+
 import asyncio
-import sys
+import logging
 import time
-from typing import Optional
-from datetime import datetime
+from typing import Any, Optional
 
-
-def _log(*args: object) -> None:
-    """Emit scheduler diagnostics to stderr.
-
-    stdout is reserved for this server's JSON-RPC stdio framing; printing
-    status/error lines there would corrupt the MCP message stream.
-    """
-    print(*args, file=sys.stderr, flush=True)
+logger = logging.getLogger(__name__)
 
 
 class ArchivalScheduler:
@@ -42,6 +36,8 @@ class ArchivalScheduler:
             interval_seconds: Interval between archival checks (default: 24h)
             enabled: Whether scheduler is enabled
         """
+        if interval_seconds < 1:
+            raise ValueError("interval_seconds must be >= 1")
         self.system = remember_system
         self.interval = interval_seconds
         self.enabled = enabled
@@ -49,17 +45,18 @@ class ArchivalScheduler:
         self.task: Optional[asyncio.Task] = None
         self.last_run: Optional[int] = None
         self.total_archived = 0
+        self.last_error: Optional[str] = None
 
     async def start(self) -> None:
         """Start the scheduler"""
         if self.running:
-            _log("[Scheduler] Already running")
+            logger.info("Scheduler already running")
             return
 
         self.enabled = True
         self.running = True
         self.task = asyncio.create_task(self._run_loop())
-        _log(f"[Scheduler] Started (interval: {self.interval}s)")
+        logger.info("Scheduler started (interval: %ss)", self.interval)
 
     async def stop(self) -> None:
         """Stop the scheduler"""
@@ -73,8 +70,9 @@ class ArchivalScheduler:
                 await self.task
             except asyncio.CancelledError:
                 pass
+            self.task = None
 
-        _log("[Scheduler] Stopped")
+        logger.info("Scheduler stopped")
 
     async def _run_loop(self) -> None:
         """Main scheduler loop"""
@@ -84,8 +82,8 @@ class ArchivalScheduler:
                 await asyncio.sleep(self.interval)
             except asyncio.CancelledError:
                 break
-            except Exception as e:
-                _log(f"[Scheduler] Error: {e}")
+            except Exception:
+                logger.exception("Scheduler loop error")
                 await asyncio.sleep(60)  # Wait 1 minute before retry
 
     async def _run_archival(self) -> None:
@@ -94,12 +92,9 @@ class ArchivalScheduler:
             return
 
         start_time = time.time()
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        _log(f"\n[Scheduler] Running archival at {timestamp}")
+        logger.info("Running archival")
 
         try:
-            # Archive old memories
             stats = await self.system.archive_old_memories(
                 age_days=self.system.archive_threshold_days,
                 min_salience=self.system.archive_min_salience
@@ -107,28 +102,34 @@ class ArchivalScheduler:
 
             self.last_run = int(time.time() * 1000)
             self.total_archived += stats.archived_count
+            self.last_error = None
 
             elapsed = time.time() - start_time
 
             if stats.archived_count > 0:
-                _log(f"[Scheduler] Archived {stats.archived_count} memories")
-                _log(f"[Scheduler] Archive size: {stats.archive_size_bytes:,} bytes")
-                _log(f"[Scheduler] Compression: {stats.compression_ratio:.2f}x")
+                logger.info(
+                    "Archived %s memories (%s bytes, %.2fx) in %.2fs; lifetime total %s",
+                    stats.archived_count,
+                    stats.archive_size_bytes,
+                    stats.compression_ratio,
+                    elapsed,
+                    self.total_archived,
+                )
             else:
-                _log(f"[Scheduler] No memories eligible for archival")
+                logger.info(
+                    "No memories eligible for archival (%.2fs)", elapsed
+                )
 
-            _log(f"[Scheduler] Completed in {elapsed:.2f}s")
-            _log(f"[Scheduler] Total archived (lifetime): {self.total_archived}")
-
-        except Exception as e:
-            _log(f"[Scheduler] Archival failed: {e}")
+        except Exception as exc:
+            self.last_error = str(exc)
+            logger.exception("Archival failed")
 
     async def run_now(self) -> None:
         """Manually trigger archival immediately"""
-        _log("[Scheduler] Manual archival triggered")
+        logger.info("Manual archival triggered")
         await self._run_archival()
 
-    def get_status(self) -> dict:
+    def get_status(self) -> dict[str, Any]:
         """Get scheduler status"""
         return {
             "running": self.running,
@@ -136,7 +137,8 @@ class ArchivalScheduler:
             "interval_seconds": self.interval,
             "last_run": self.last_run,
             "total_archived": self.total_archived,
-            "next_run_in": self._time_until_next_run()
+            "next_run_in": self._time_until_next_run(),
+            "last_error": self.last_error,
         }
 
     def _time_until_next_run(self) -> Optional[int]:

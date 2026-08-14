@@ -11,9 +11,11 @@ fresh launch. With lazy init the stdio handshake completes in <1s and the
 heavy work runs on the first ``tools/call`` that actually needs it.
 """
 import asyncio
+import logging
 import sys
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
 from fastmcp import FastMCP
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     # Type-only imports — never executed at runtime, so they cost nothing
@@ -23,6 +25,14 @@ if TYPE_CHECKING:
     from remember.file_indexer import FileIndexer
 
 __all__ = ["app", "setup"]
+
+# stdout is JSON-RPC. All diagnostics go to stderr.
+logging.basicConfig(
+    stream=sys.stderr,
+    level=logging.INFO,
+    format="%(name)s %(levelname)s: %(message)s",
+)
+logger = logging.getLogger("remember.server")
 
 # Create the main FastMCP app
 app = FastMCP(
@@ -123,13 +133,15 @@ async def add_memory(
 ) -> Dict[str, Any]:
     """Add a new memory to active storage"""
     system = await _aget_system()
-    result = await system.add_memory(
-        content=content,
-        user_id=user_id,
-        tags=tags,
-        metadata=metadata
-    )
-    return result
+    try:
+        return await system.add_memory(
+            content=content,
+            user_id=user_id,
+            tags=tags,
+            metadata=metadata
+        )
+    except ValueError as exc:
+        return {"error": "invalid_argument", "message": str(exc)}
 
 
 @app.tool()
@@ -142,13 +154,16 @@ async def query_memory(
 ) -> List[Dict[str, Any]]:
     """Query memories with hybrid search"""
     system = await _aget_system()
-    results = await system.query(
-        query=query,
-        k=k,
-        user_id=user_id,
-        include_archive=include_archive,
-        sectors=sectors
-    )
+    try:
+        results = await system.query(
+            query=query,
+            k=k,
+            user_id=user_id,
+            include_archive=include_archive,
+            sectors=sectors
+        )
+    except ValueError as exc:
+        return [{"error": "invalid_argument", "message": str(exc)}]
     return [
         {
             "id": r.id,
@@ -173,11 +188,14 @@ async def archive_memories(
 ) -> Dict[str, Any]:
     """Archive old/decayed memories to video"""
     system = await _aget_system()
-    stats = await system.archive_old_memories(
-        age_days=age_days,
-        min_salience=min_salience,
-        user_id=user_id
-    )
+    try:
+        stats = await system.archive_old_memories(
+            age_days=age_days,
+            min_salience=min_salience,
+            user_id=user_id
+        )
+    except ValueError as exc:
+        return {"error": "invalid_argument", "message": str(exc)}
     return {
         "archived_count": stats.archived_count,
         "active_remaining": stats.active_remaining,
@@ -194,12 +212,16 @@ async def recall_memory(
 ) -> Dict[str, Any]:
     """Recall archived memory back to active storage"""
     system = await _aget_system()
-    result = await system.recall_from_archive(
-        archive_file=archive_file,
-        content=content,
-        user_id=user_id
-    )
-    return result
+    try:
+        return await system.recall_from_archive(
+            archive_file=archive_file,
+            content=content,
+            user_id=user_id
+        )
+    except FileNotFoundError as exc:
+        return {"error": "not_found", "message": str(exc)}
+    except ValueError as exc:
+        return {"error": "invalid_argument", "message": str(exc)}
 
 
 @app.tool()
@@ -210,6 +232,7 @@ async def get_stats(user_id: Optional[str] = None) -> Dict[str, Any]:
     return {
         "active_count": stats.active_count,
         "archive_count": stats.archive_count,
+        "archive_file_count": stats.archive_file_count,
         "total_memories": stats.total_memories,
         "active_db_size": stats.active_db_size,
         "archive_size": stats.archive_size,
@@ -222,6 +245,7 @@ async def get_stats(user_id: Optional[str] = None) -> Dict[str, Any]:
 @app.tool()
 async def scheduler_status() -> Dict[str, Any]:
     """Get archival scheduler status"""
+    await _aget_system()
     global scheduler
     if scheduler is None:
         return {"error": "Scheduler not initialized"}
@@ -231,6 +255,7 @@ async def scheduler_status() -> Dict[str, Any]:
 @app.tool()
 async def scheduler_control(action: str) -> Dict[str, str]:
     """Control archival scheduler (start/stop/run_now)"""
+    await _aget_system()
     global scheduler
     if scheduler is None:
         return {"error": "Scheduler not initialized"}
@@ -245,7 +270,10 @@ async def scheduler_control(action: str) -> Dict[str, str]:
         await scheduler.run_now()
         message = "Archival triggered"
     else:
-        message = f"Unknown action: {action}"
+        return {
+            "error": "invalid_argument",
+            "message": f"Unknown action: {action}. Expected start, stop, or run_now.",
+        }
 
     return {"status": message}
 
@@ -297,6 +325,8 @@ async def index_file(
         return {"error": "permission_denied", "message": str(e)}
     except FileNotFoundError as e:
         return {"error": "not_found", "message": str(e)}
+    except ValueError as e:
+        return {"error": "invalid_argument", "message": str(e)}
 
 
 @app.tool()
@@ -344,6 +374,8 @@ async def index_directory(
         return {"error": "permission_denied", "message": str(e)}
     except FileNotFoundError as e:
         return {"error": "not_found", "message": str(e)}
+    except ValueError as e:
+        return {"error": "invalid_argument", "message": str(e)}
 
 
 @app.tool()
@@ -366,14 +398,17 @@ async def search_files(
         List of search results with file metadata and line numbers
     """
     indexer = await _aget_file_indexer()
-    results = await asyncio.to_thread(
-        indexer.search,
-        query=query,
-        top_k=top_k,
-        file_filter=file_filter,
-        file_type_filter=file_type_filter
-    )
-    return results
+    try:
+        results = await asyncio.to_thread(
+            indexer.search,
+            query=query,
+            top_k=top_k,
+            file_filter=file_filter,
+            file_type_filter=file_type_filter
+        )
+        return results
+    except ValueError as exc:
+        return [{"error": "invalid_argument", "message": str(exc)}]
 
 
 @app.tool()
@@ -443,12 +478,12 @@ def shutdown() -> None:
         try:
             remember_system.close()
         except Exception as e:  # noqa: BLE001 — defensive cleanup on exit
-            print(f"Error closing remember_system: {e}", file=sys.stderr)
+            logger.warning("Error closing remember_system: %s", e)
     if file_indexer is not None:
         try:
             file_indexer.close()
         except Exception as e:  # noqa: BLE001 — defensive cleanup on exit
-            print(f"Error closing file_indexer: {e}", file=sys.stderr)
+            logger.warning("Error closing file_indexer: %s", e)
 
 
 def main():

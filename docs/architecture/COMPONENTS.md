@@ -1,6 +1,6 @@
 # Components
 
-Six source modules. Signatures below are transcribed from the source, not paraphrased.
+Six source modules plus `remember/video.py`. Signatures below are transcribed from the source, not paraphrased.
 
 ---
 
@@ -59,10 +59,22 @@ Key internals:
 - **`_uniform_embedding_provider()`** (module level) pins every `openmemory` sector to
   `UNIFORM_EMBEDDING_MODEL`, preventing the 384-vs-768 dimension crash.
 - **`_write_lock`** serializes archive/add/forget; the archival DELETE runs in `with conn:`.
-- **`_retriever_cache`** memoizes `MemvidRetriever` by `(video_path, index_path)`.
+- **`_retriever_cache`** memoizes `MemvidRetriever` via `remember.video.RetrieverCache`.
+- **`_archive_lock`** serializes the full archival flow so two runs cannot encode the
+  same snapshot; `_write_lock` is only held around SELECT/DELETE so `add_memory`
+  can proceed during encoding.
 
 Exports: `RememberSystem`, `UNIFORM_EMBEDDING_MODEL`, `logger`.
-Depends on: `remember/types.py` (first-party); `openmemory`, `memvid` (external).
+Depends on: `remember/types.py`, `remember/video.py` (first-party); `openmemory` (external).
+
+---
+
+## `remember/video.py` — memvid isolation
+
+Shared import isolation, `MemvidEncoder(enable_docker=False)` factory, bounded
+retriever LRU, `search_with_scores`, and failed-encode cleanup. Both
+`RememberSystem` and `FileIndexer` go through it so constructor names and
+stdout redirection cannot drift apart.
 
 ---
 
@@ -83,10 +95,13 @@ class FileIndexer:
 ```
 
 Note the API is **synchronous** while `RememberSystem`'s is `async`. `server.py` bridges
-this: the file-index tools are `async def` at the MCP boundary and call these directly.
+this: the file-index tools are `async def` at the MCP boundary and call these via
+`asyncio.to_thread`. Path checks, size/binary gates, and metadata I/O do not import
+memvid; encoding and search go through `remember.video` so stdout stays off the
+JSON-RPC pipe.
 
-Exports: `FileIndexer`, `logger`. Depends on: `memvid` (external) only — no first-party
-imports, which is why it is a leaf in the graph.
+Exports: `FileIndexer`, `logger`. Depends on: `remember/video.py` (first-party);
+`memvid` (external, lazy).
 
 ---
 
@@ -124,9 +139,9 @@ class MemoryLocation(str, Enum)     # active | archive
 
 Imports nothing first-party — a true leaf, so it cannot participate in a cycle.
 
-> ⚠ `SystemStats.archive_count` counts archive **files**, not archived memories, so
-> `total_memories = active_count + archive_count` mixes units. Recorded in the CHANGELOG
-> as a known issue.
+> `SystemStats.archive_count` is a **memory** count. `archive_file_count` is the
+> number of video files. `total_memories = active_count + archive_count` is
+> conserved across an archive that packs N memories into one video.
 
 Exports: all four names above.
 
@@ -152,6 +167,6 @@ Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_m
 
 | Claim | Value | Source |
 |---|---|---|
-| totalTypeScriptFiles | 15 | dependency-graph.json |
+| totalTypeScriptFiles | 18 | dependency-graph.json |
 | totalExports | 31 | dependency-graph.json |
 | noImporterFileCount | 1 | unused-analysis.json |

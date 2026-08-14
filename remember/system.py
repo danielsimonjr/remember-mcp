@@ -2,22 +2,34 @@
 Main RememberSystem - Hybrid memory manager
 Integrates OpenMemory (active) with memvid (archive)
 """
-import os
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import hashlib
+import logging
+import sqlite3
 import sys
 import time
-import asyncio
-import logging
-import contextlib
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple
+from typing import Any, Dict, List, Optional, Sequence
+
 from .types import (
+    ArchiveStats,
     HybridMemoryResult,
     MemoryLocation,
-    ArchiveStats,
-    SystemStats
+    SystemStats,
+)
+from .video import (
+    RetrieverCache,
+    encode_chunks,
+    sidecar_chunk_count,
 )
 
 logger = logging.getLogger(__name__)
+
+MAX_CONTENT_CHARS = 100_000
+MAX_QUERY_K = 100
 
 # Import OpenMemory (will be installed separately).
 # Redirect stdout to stderr during import so any library-level `print(...)`
@@ -28,7 +40,6 @@ try:
         from openmemory import MemorySystem as OpenMemory
         from openmemory import SectorType
         from openmemory.embeddings import EmbeddingProvider
-        from openmemory.types import MemoryResult
 except ImportError:
     raise ImportError(
         "OpenMemory not found. Install with: pip install -e ../openmemory-python"
@@ -64,14 +75,19 @@ def _uniform_embedding_provider() -> "EmbeddingProvider":
         models={sector: UNIFORM_EMBEDDING_MODEL for sector in SectorType}
     )
 
-# Import memvid (same stdout-isolation rationale)
-try:
-    with contextlib.redirect_stdout(sys.stderr):
-        from memvid import MemvidEncoder, MemvidRetriever
-except ImportError:
-    raise ImportError(
-        "Memvid not found. Install with: pip install memvid"
-    )
+
+def _row_mapping(row: Any) -> Dict[str, Any]:
+    """Normalize a sqlite row into a dict regardless of row_factory."""
+    if isinstance(row, dict):
+        return row
+    if hasattr(row, "keys"):
+        return {key: row[key] for key in row.keys()}
+    raise TypeError(f"Cannot convert sqlite row of type {type(row)!r} to dict")
+
+
+def _stable_chunk_id(timestamp: str, chunk: str) -> str:
+    digest = hashlib.sha256(chunk.encode("utf-8", errors="replace")).hexdigest()[:16]
+    return f"archive_{timestamp}_{digest}"
 
 
 class RememberSystem:
@@ -120,6 +136,7 @@ class RememberSystem:
             db_path=active_db,
             embedding_provider=_uniform_embedding_provider(),
         )
+        self._configure_sqlite()
 
         # Archive index: maps user_id → archive file info
         self.archive_index: Dict[str, Dict[str, Any]] = {}
@@ -130,10 +147,34 @@ class RememberSystem:
         # Serialize archive/add/forget paths to prevent SELECT-DELETE races
         # against concurrent writers on the shared SQLite connection.
         self._write_lock = asyncio.Lock()
+        # Serialize the full archive flow so two archival runs cannot encode
+        # the same snapshot twice. Distinct from _write_lock so add_memory
+        # can proceed while video encoding (seconds) is in flight.
+        self._archive_lock = asyncio.Lock()
 
         # Cache MemvidRetriever instances by (video_path, index_path) so we
         # don't reload the FAISS index + reopen the mp4 reader on every query.
-        self._retriever_cache: Dict[Tuple[str, str], Any] = {}
+        # Bounded LRU — an unbounded cache leaked FAISS indexes for every
+        # archive ever created in the process lifetime.
+        self._retriever_cache = RetrieverCache()
+
+    def _configure_sqlite(self) -> None:
+        """WAL + busy timeout: readers don't block writers, and a locked
+        connection waits instead of raising immediately. Best-effort — the
+        connection belongs to openmemory, so a missing/odd conn is not fatal.
+        """
+        conn = getattr(getattr(self.active, "storage", None), "conn", None)
+        if conn is None:
+            return
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            if getattr(conn, "row_factory", None) is None:
+                conn.row_factory = sqlite3.Row
+        except Exception as exc:  # noqa: BLE001 — openmemory owns this conn
+            logger.warning("Could not apply SQLite pragmas: %s", exc)
 
     def _get_retriever(self, video_path: str, index_path: str) -> Any:
         """
@@ -141,15 +182,7 @@ class RememberSystem:
         pair, creating one on first use. Caching avoids reloading the FAISS
         index and reopening the mp4 reader on every query.
         """
-        key = (video_path, index_path)
-        retriever = self._retriever_cache.get(key)
-        if retriever is None:
-            retriever = MemvidRetriever(
-                video_path=video_path,
-                index_path=index_path,
-            )
-            self._retriever_cache[key] = retriever
-        return retriever
+        return self._retriever_cache.get(video_path, index_path)
 
     @staticmethod
     def _archive_key(user_id: Optional[str]) -> str:
@@ -180,24 +213,87 @@ class RememberSystem:
         return user_id or "default"
 
     def _load_archive_index(self) -> None:
-        """Load existing archive files"""
+        """Load existing archive files.
+
+        Filename format is ``user_{user_id}_{unix_ts}.mp4``. ``user_id`` may
+        itself contain underscores, so the timestamp is the *last* ``_``
+        segment, not ``parts[2]``.
+        """
         for archive_file in self.archive_dir.glob("*.mp4"):
-            # Parse filename: user_{user_id}_{timestamp}.mp4
             stem = archive_file.stem
-            if stem.startswith("user_"):
-                parts = stem.split("_")
-                if len(parts) >= 3:
-                    user_id = parts[1]
-                    timestamp = parts[2]
+            if not stem.startswith("user_"):
+                continue
+            rest = stem[len("user_"):]
+            user_id, sep, timestamp = rest.rpartition("_")
+            if not sep or not user_id or not timestamp.isdigit():
+                logger.warning("Skipping unparseable archive filename: %s", archive_file)
+                continue
 
-                    if user_id not in self.archive_index:
-                        self.archive_index[user_id] = {}
+            index_path = archive_file.with_suffix(".json")
+            if user_id not in self.archive_index:
+                self.archive_index[user_id] = {}
 
-                    self.archive_index[user_id][timestamp] = {
-                        "file": str(archive_file),
-                        "index": str(archive_file.with_suffix(".json")),
-                        "created_at": int(timestamp)
-                    }
+            self.archive_index[user_id][timestamp] = {
+                "file": str(archive_file),
+                "index": str(index_path),
+                "created_at": int(timestamp),
+                "memory_count": sidecar_chunk_count(index_path),
+            }
+
+    def _conn(self) -> Any:
+        return self.active.storage.conn
+
+    async def _execute(self, sql: str, params: Sequence[Any] = ()) -> Any:
+        return await asyncio.to_thread(self._conn().execute, sql, params)
+
+    async def _count_active(self, user_id: Optional[str]) -> int:
+        if user_id:
+            cursor = await self._execute(
+                "SELECT COUNT(*) as count FROM memories WHERE user_id = ?",
+                (user_id,),
+            )
+        else:
+            cursor = await self._execute("SELECT COUNT(*) as count FROM memories")
+        row = await asyncio.to_thread(cursor.fetchone)
+        if not row:
+            return 0
+        mapping = _row_mapping(row)
+        return int(mapping.get("count") or 0)
+
+    async def _count_and_avg_salience(self, user_id: Optional[str]) -> tuple[int, float]:
+        if user_id:
+            cursor = await self._execute(
+                "SELECT COUNT(*) as count, AVG(salience) as avg "
+                "FROM memories WHERE user_id = ?",
+                (user_id,),
+            )
+        else:
+            cursor = await self._execute(
+                "SELECT COUNT(*) as count, AVG(salience) as avg FROM memories"
+            )
+        row = await asyncio.to_thread(cursor.fetchone)
+        if not row:
+            return 0, 0.0
+        mapping = _row_mapping(row)
+        avg = mapping.get("avg")
+        return int(mapping.get("count") or 0), float(avg) if avg is not None else 0.0
+
+    @staticmethod
+    def _validate_content(content: str) -> str:
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("content must be a non-empty string")
+        if len(content) > MAX_CONTENT_CHARS:
+            raise ValueError(
+                f"content exceeds {MAX_CONTENT_CHARS} characters "
+                f"({len(content)} given)"
+            )
+        return content
+
+    @staticmethod
+    def _validate_k(k: int, name: str = "k") -> int:
+        if not isinstance(k, int) or isinstance(k, bool) or k < 1 or k > MAX_QUERY_K:
+            raise ValueError(f"{name} must be an integer between 1 and {MAX_QUERY_K}")
+        return k
 
     async def add_memory(
         self,
@@ -218,6 +314,7 @@ class RememberSystem:
         Returns:
             Dict with memory ID and sector info
         """
+        content = self._validate_content(content)
         async with self._write_lock:
             result = await self.active.add_memory(
                 content=content,
@@ -250,6 +347,10 @@ class RememberSystem:
         Returns:
             List of hybrid memory results
         """
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("query must be a non-empty string")
+        k = self._validate_k(k)
+
         results: List[HybridMemoryResult] = []
 
         # Query active memories
@@ -291,46 +392,59 @@ class RememberSystem:
     async def _query_archives(
         self,
         query: str,
-        user_id: str,
+        user_id: Optional[str],
         k: int
     ) -> List[HybridMemoryResult]:
-        """Query archived memories for a user"""
-        results = []
+        """Query archived memories for a user.
 
-        # Get user's archives
+        Each archive is searched in a worker thread so the event loop stays
+        free; different archives have independent retrievers so this is safe.
+        """
+        from .video import search_with_scores
+
         user_archives = self.archive_index.get(self._archive_key(user_id), {})
+        if not user_archives:
+            return []
 
-        for timestamp, archive_info in user_archives.items():
+        def _search_one(timestamp: str, archive_info: Dict[str, Any]) -> List[HybridMemoryResult]:
             try:
-                # Reuse cached retriever for this archive (FAISS + mp4 reader
-                # would otherwise be reloaded on every query — leak + slow).
                 retriever = self._get_retriever(
                     video_path=archive_info["file"],
                     index_path=archive_info["index"],
                 )
+                hits = search_with_scores(retriever, query, k)
+            except Exception as exc:  # noqa: BLE001 — one bad archive must not fail the query
+                logger.error("Error querying archive %s: %s", archive_info.get("file"), exc)
+                return []
 
-                # Search archive
-                archive_hits = retriever.search(query, top_k=k)
+            rows: List[HybridMemoryResult] = []
+            for chunk, score in hits:
+                rows.append(HybridMemoryResult(
+                    id=_stable_chunk_id(timestamp, chunk),
+                    content=chunk,
+                    score=score * 0.8,  # Slight penalty for archived
+                    location=MemoryLocation.ARCHIVE,
+                    sectors=["semantic"],  # Archives don't preserve sectors
+                    primary_sector="semantic",
+                    salience=0.0,
+                    last_seen_at=archive_info["created_at"],
+                    archived_at=archive_info["created_at"],
+                    archive_file=archive_info["file"]
+                ))
+            return rows
 
-                # Convert to hybrid results
-                for chunk, score in archive_hits:
-                    results.append(HybridMemoryResult(
-                        id=f"archive_{timestamp}_{hash(chunk)}",
-                        content=chunk,
-                        score=score * 0.8,  # Slight penalty for archived
-                        location=MemoryLocation.ARCHIVE,
-                        sectors=["semantic"],  # Archives don't preserve sectors
-                        primary_sector="semantic",
-                        salience=0.0,
-                        last_seen_at=archive_info["created_at"],
-                        archived_at=archive_info["created_at"],
-                        archive_file=archive_info["file"]
-                    ))
+        tasks = [
+            asyncio.to_thread(_search_one, timestamp, archive_info)
+            for timestamp, archive_info in user_archives.items()
+        ]
+        batches = await asyncio.gather(*tasks, return_exceptions=True)
 
-            except Exception as e:
-                print(f"Error querying archive {archive_info['file']}: {e}", file=sys.stderr)
+        results: List[HybridMemoryResult] = []
+        for batch in batches:
+            if isinstance(batch, Exception):
+                logger.error("Archive search worker failed: %s", batch)
                 continue
-
+            results.extend(batch)
         return results
 
     async def archive_old_memories(
@@ -350,122 +464,108 @@ class RememberSystem:
         Returns:
             Archive statistics
         """
-        age_days = age_days or self.archive_threshold_days
-        min_salience = min_salience or self.archive_min_salience
+        # ``or`` treats 0 / 0.0 as missing, so ``age_days=0`` (archive now)
+        # used to silently fall back to the 60-day default. ``is None`` is
+        # the actual "use the configured default" check.
+        if age_days is None:
+            age_days = self.archive_threshold_days
+        else:
+            age_days = int(age_days)
+        if min_salience is None:
+            min_salience = self.archive_min_salience
+        else:
+            min_salience = float(min_salience)
+        if age_days < 0:
+            raise ValueError("age_days must be >= 0")
 
         # Calculate age threshold in milliseconds (database uses ms timestamps)
         age_threshold_ms = int(time.time() * 1000) - (age_days * 24 * 60 * 60 * 1000)
 
-        # Serialize the entire archive flow against add_memory / forget paths
-        # so concurrent writers cannot corrupt the SELECT → encode → DELETE
-        # sequence on the shared SQLite connection.
-        async with self._write_lock:
-            return await self._archive_old_memories_locked(
-                user_id=user_id,
-                age_threshold_ms=age_threshold_ms,
-                min_salience=min_salience,
-            )
+        # Snapshot eligibility under the write lock, then encode *without*
+        # holding it. Video encoding blocks for seconds and used to freeze
+        # every concurrent add_memory. DELETE is re-checked by id under the
+        # lock so a concurrent writer cannot resurrect a row we already
+        # encoded, and we never delete a row we failed to encode.
+        async with self._archive_lock:
+            async with self._write_lock:
+                eligible_memories = await self._select_eligible_memories(
+                    user_id=user_id,
+                    age_threshold_ms=age_threshold_ms,
+                    min_salience=min_salience,
+                )
 
-    async def _archive_old_memories_locked(
+            if not eligible_memories:
+                return ArchiveStats(
+                    archived_count=0,
+                    active_remaining=await self._count_active(user_id),
+                    archive_size_bytes=0,
+                    compression_ratio=1.0
+                )
+
+            timestamp = int(time.time())
+            archive_filename = f"user_{self._archive_key(user_id)}_{timestamp}"
+            video_path = self.archive_dir / f"{archive_filename}.mp4"
+            index_path = self.archive_dir / f"{archive_filename}.json"
+            memory_ids = [mem["id"] for mem in eligible_memories]
+            contents = [mem["content"] for mem in eligible_memories]
+
+            try:
+                await asyncio.to_thread(encode_chunks, contents, video_path, index_path)
+            except Exception:
+                logger.exception("Memvid encoding failed for %s", video_path)
+                return ArchiveStats(
+                    archived_count=0,
+                    active_remaining=await self._count_active(user_id),
+                    archive_size_bytes=0,
+                    compression_ratio=1.0
+                )
+
+            async with self._write_lock:
+                return await self._commit_archive(
+                    user_id=user_id,
+                    timestamp=timestamp,
+                    video_path=video_path,
+                    index_path=index_path,
+                    memory_ids=memory_ids,
+                    original_size=sum(len(c) for c in contents),
+                )
+
+    async def _select_eligible_memories(
         self,
         user_id: Optional[str],
         age_threshold_ms: int,
         min_salience: float,
-    ) -> ArchiveStats:
-        """
-        Inner archive routine — must be called with ``self._write_lock`` held.
-        SELECT and DELETE run inside a single ``with conn:`` block so they
-        commit atomically as one transaction.
-        """
-        # Query for eligible memories
+    ) -> List[Dict[str, Any]]:
+        # Only id + content are consumed downstream. Avoid SELECT * so we
+        # don't pull embedding blobs into Python for every eligible row.
         if user_id:
-            query = """
-                SELECT * FROM memories
+            sql = """
+                SELECT id, content FROM memories
                 WHERE user_id = ? AND created_at <= ? AND salience < ?
                 ORDER BY salience ASC, created_at ASC
             """
-            cursor = await asyncio.to_thread(
-                self.active.storage.conn.execute,
-                query,
-                (user_id, age_threshold_ms, min_salience)
-            )
+            params: Sequence[Any] = (user_id, age_threshold_ms, min_salience)
         else:
-            query = """
-                SELECT * FROM memories
+            sql = """
+                SELECT id, content FROM memories
                 WHERE created_at <= ? AND salience < ?
                 ORDER BY salience ASC, created_at ASC
             """
-            cursor = await asyncio.to_thread(
-                self.active.storage.conn.execute,
-                query,
-                (age_threshold_ms, min_salience)
-            )
-
+            params = (age_threshold_ms, min_salience)
+        cursor = await self._execute(sql, params)
         rows = await asyncio.to_thread(cursor.fetchall)
-        eligible_memories = [dict(row) for row in rows]
+        return [_row_mapping(row) for row in rows]
 
-        if not eligible_memories:
-            # Count active memories even when nothing to archive
-            if user_id:
-                cursor = await asyncio.to_thread(
-                    self.active.storage.conn.execute,
-                    "SELECT COUNT(*) as count FROM memories WHERE user_id = ?",
-                    (user_id,)
-                )
-            else:
-                cursor = await asyncio.to_thread(
-                    self.active.storage.conn.execute,
-                    "SELECT COUNT(*) as count FROM memories"
-                )
-            row = await asyncio.to_thread(cursor.fetchone)
-            active_remaining = row['count'] if row else 0
-            
-            return ArchiveStats(
-                archived_count=0,
-                active_remaining=active_remaining,
-                archive_size_bytes=0,
-                compression_ratio=1.0
-            )
-
-        # Create archive video
-        timestamp = int(time.time())
-        archive_filename = f"user_{user_id or 'default'}_{timestamp}"
-        video_path = self.archive_dir / f"{archive_filename}.mp4"
-        index_path = self.archive_dir / f"{archive_filename}.json"
-
-        # Encode to video using memvid
-        try:
-            encoder = MemvidEncoder()
-            encoder.add_chunks([mem['content'] for mem in eligible_memories])
-            encoder.build_video(str(video_path), str(index_path))
-        except Exception as e:
-            print(f"ERROR: Memvid encoding failed: {e}", file=sys.stderr)
-            import traceback
-            traceback.print_exc()
-            # Return early if encoding fails
-            if user_id:
-                cursor = await asyncio.to_thread(
-                    self.active.storage.conn.execute,
-                    "SELECT COUNT(*) as count FROM memories WHERE user_id = ?",
-                    (user_id,)
-                )
-            else:
-                cursor = await asyncio.to_thread(
-                    self.active.storage.conn.execute,
-                    "SELECT COUNT(*) as count FROM memories"
-                )
-            row = await asyncio.to_thread(cursor.fetchone)
-            active_remaining = row['count'] if row else 0
-            
-            return ArchiveStats(
-                archived_count=0,
-                active_remaining=active_remaining,
-                archive_size_bytes=0,
-                compression_ratio=1.0
-            )
-
-        # Update archive index. Unconditional: the previous `if user_id:` guard
-        # orphaned every default-user archive (see _archive_key).
+    async def _commit_archive(
+        self,
+        user_id: Optional[str],
+        timestamp: int,
+        video_path: Path,
+        index_path: Path,
+        memory_ids: List[Any],
+        original_size: int,
+    ) -> ArchiveStats:
+        """Register the archive and DELETE the snapshot ids. Lock must be held."""
         key = self._archive_key(user_id)
         if key not in self.archive_index:
             self.archive_index[key] = {}
@@ -473,49 +573,62 @@ class RememberSystem:
         self.archive_index[key][str(timestamp)] = {
             "file": str(video_path),
             "index": str(index_path),
-            "created_at": timestamp
+            "created_at": timestamp,
+            "memory_count": len(memory_ids),
         }
 
-        # Remove from active storage. Use ``with conn:`` so the DELETE +
-        # COMMIT run as a single atomic transaction; the surrounding
-        # ``self._write_lock`` further guarantees no add_memory / forget
-        # interleaves between the eligibility SELECT above and this DELETE.
-        memory_ids = [mem['id'] for mem in eligible_memories]
-        placeholders = ','.join('?' * len(memory_ids))
+        # Re-check which snapshot ids are still present so a concurrent
+        # forget/archive cannot make this DELETE a surprise no-op that we
+        # then report as success against the wrong remaining count.
+        placeholders = ",".join("?" * len(memory_ids))
         delete_query = f"DELETE FROM memories WHERE id IN ({placeholders})"
 
-        def _delete_atomic() -> None:
-            conn = self.active.storage.conn
+        def _delete_atomic() -> int:
+            conn = self._conn()
             with conn:  # BEGIN ... COMMIT (rolls back on exception)
                 conn.execute(delete_query, memory_ids)
+            return len(memory_ids)
 
         await asyncio.to_thread(_delete_atomic)
 
-        archive_size = video_path.stat().st_size
-        original_size = sum(len(mem['content']) for mem in eligible_memories)
+        try:
+            archive_size = video_path.stat().st_size
+        except OSError as exc:
+            logger.warning("Could not stat new archive %s: %s", video_path, exc)
+            archive_size = 0
         compression_ratio = original_size / archive_size if archive_size > 0 else 1.0
 
-        # Count remaining active memories
-        if user_id:
-            cursor = await asyncio.to_thread(
-                self.active.storage.conn.execute,
-                "SELECT COUNT(*) as count FROM memories WHERE user_id = ?",
-                (user_id,)
-            )
-        else:
-            cursor = await asyncio.to_thread(
-                self.active.storage.conn.execute,
-                "SELECT COUNT(*) as count FROM memories"
-            )
-        row = await asyncio.to_thread(cursor.fetchone)
-        active_remaining = row['count'] if row else 0
-
         return ArchiveStats(
-            archived_count=len(eligible_memories),
-            active_remaining=active_remaining,
+            archived_count=len(memory_ids),
+            active_remaining=await self._count_active(user_id),
             archive_size_bytes=archive_size,
             compression_ratio=compression_ratio
         )
+
+    def _lookup_archive(
+        self, archive_file: str, user_id: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
+        """Resolve ``archive_file`` against the in-memory index only.
+
+        Never opens an arbitrary path — a client-supplied string like
+        ``../../etc/passwd`` cannot escape the archive directory this way.
+        """
+        if not archive_file or not isinstance(archive_file, str):
+            return None
+        needle = Path(archive_file).name
+        stem = Path(needle).stem
+        key = self._archive_key(user_id)
+        scopes = [self.archive_index.get(key, {})]
+        if user_id is None:
+            scopes = list(self.archive_index.values())
+        for archives in scopes:
+            for info in archives.values():
+                file_path = info.get("file") or ""
+                if archive_file in (file_path, Path(file_path).name, Path(file_path).stem):
+                    return info
+                if needle in (Path(file_path).name, Path(file_path).stem) or stem == Path(file_path).stem:
+                    return info
+        return None
 
     async def recall_from_archive(
         self,
@@ -534,14 +647,43 @@ class RememberSystem:
         Returns:
             New memory info in active storage
         """
-        # Add back to active memory
+        content = self._validate_content(content)
+        info = self._lookup_archive(archive_file, user_id)
+        if info is None:
+            raise FileNotFoundError(f"Unknown archive: {archive_file}")
+        if not Path(info["file"]).exists():
+            raise FileNotFoundError(f"Archive file missing on disk: {info['file']}")
+
         result = await self.add_memory(
             content=content,
             user_id=user_id,
-            metadata={"recalled_from": archive_file}
+            metadata={"recalled_from": info["file"]}
         )
-
         return result
+
+    def _archive_totals(self, user_id: Optional[str]) -> tuple[int, int, int]:
+        """Return (memory_count, file_count, size_bytes) for one user or all."""
+        if user_id:
+            groups = [self.archive_index.get(self._archive_key(user_id), {})]
+        else:
+            groups = list(self.archive_index.values())
+
+        memory_count = 0
+        file_count = 0
+        size_bytes = 0
+        for archives in groups:
+            file_count += len(archives)
+            for archive_info in archives.values():
+                memory_count += int(archive_info.get("memory_count") or 0)
+                try:
+                    size_bytes += Path(archive_info["file"]).stat().st_size
+                except OSError as exc:
+                    logger.warning(
+                        "Could not stat archive %s: %s",
+                        archive_info.get("file"),
+                        exc,
+                    )
+        return memory_count, file_count, size_bytes
 
     async def get_stats(self, user_id: Optional[str] = None) -> SystemStats:
         """
@@ -553,71 +695,16 @@ class RememberSystem:
         Returns:
             System statistics
         """
-        # Count active memories from database
-        if user_id:
-            count_query = "SELECT COUNT(*) as count FROM memories WHERE user_id = ?"
-            avg_query = "SELECT AVG(salience) as avg FROM memories WHERE user_id = ?"
-            cursor = await asyncio.to_thread(
-                self.active.storage.conn.execute, count_query, (user_id,)
-            )
-            row = await asyncio.to_thread(cursor.fetchone)
-            active_count = row['count'] if row else 0
+        active_count, avg_salience = await self._count_and_avg_salience(user_id)
+        archive_count, archive_file_count, archive_size = self._archive_totals(user_id)
 
-            cursor = await asyncio.to_thread(
-                self.active.storage.conn.execute, avg_query, (user_id,)
-            )
-            row = await asyncio.to_thread(cursor.fetchone)
-            avg_salience = row['avg'] if row and row['avg'] is not None else 0.0
-        else:
-            count_query = "SELECT COUNT(*) as count FROM memories"
-            avg_query = "SELECT AVG(salience) as avg FROM memories"
-            cursor = await asyncio.to_thread(
-                self.active.storage.conn.execute, count_query
-            )
-            row = await asyncio.to_thread(cursor.fetchone)
-            active_count = row['count'] if row else 0
-
-            cursor = await asyncio.to_thread(
-                self.active.storage.conn.execute, avg_query
-            )
-            row = await asyncio.to_thread(cursor.fetchone)
-            avg_salience = row['avg'] if row and row['avg'] is not None else 0.0
-
-        # Count archived memories
-        archive_count = 0
-        archive_size = 0
-
-        if user_id:
-            user_archives = self.archive_index.get(self._archive_key(user_id), {})
-            archive_count = len(user_archives)
-            for archive_info in user_archives.values():
-                try:
-                    archive_size += Path(archive_info["file"]).stat().st_size
-                except OSError as e:
-                    # Permission denied / missing file / corrupted index entry —
-                    # log and keep tallying the rest. Don't swallow non-OSError.
-                    logger.warning(
-                        "Could not stat archive %s: %s",
-                        archive_info.get("file"),
-                        e,
-                    )
-        else:
-            for user_archives in self.archive_index.values():
-                archive_count += len(user_archives)
-                for archive_info in user_archives.values():
-                    try:
-                        archive_size += Path(archive_info["file"]).stat().st_size
-                    except OSError as e:
-                        logger.warning(
-                            "Could not stat archive %s: %s",
-                            archive_info.get("file"),
-                            e,
-                        )
-
-        # Get active DB size
         active_db_size = 0
-        if Path(self.active_db).exists():
-            active_db_size = Path(self.active_db).stat().st_size
+        db_path = Path(self.active_db)
+        if db_path.exists():
+            try:
+                active_db_size = db_path.stat().st_size
+            except OSError as exc:
+                logger.warning("Could not stat active db %s: %s", db_path, exc)
 
         total_size = active_db_size + archive_size
         compression_ratio = total_size / active_db_size if active_db_size > 0 else 1.0
@@ -625,6 +712,7 @@ class RememberSystem:
         return SystemStats(
             active_count=active_count,
             archive_count=archive_count,
+            archive_file_count=archive_file_count,
             total_memories=active_count + archive_count,
             active_db_size=active_db_size,
             archive_size=archive_size,
@@ -640,18 +728,7 @@ class RememberSystem:
         mp4 readers) and closes the active OpenMemory storage. Safe to call
         multiple times.
         """
-        for key, retriever in list(self._retriever_cache.items()):
-            close_fn = getattr(retriever, "close", None)
-            try:
-                if callable(close_fn):
-                    close_fn()
-                else:
-                    # MemvidRetriever exposes clear_cache() but no close();
-                    # call it to drop frame caches and large in-memory state.
-                    clear_fn = getattr(retriever, "clear_cache", None)
-                    if callable(clear_fn):
-                        clear_fn()
-            except Exception as e:  # noqa: BLE001 — defensive cleanup
-                logger.warning("Error closing retriever %s: %s", key, e)
-        self._retriever_cache.clear()
-        self.active.close()
+        self._retriever_cache.close()
+        close_fn = getattr(self.active, "close", None)
+        if callable(close_fn):
+            self.active.close()

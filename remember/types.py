@@ -38,7 +38,13 @@ class ArchiveStats:
 
 @dataclass
 class SystemStats:
-    """Overall system statistics"""
+    """Overall system statistics.
+
+    ``archive_count`` is the number of *memories* in archive storage, not the
+    number of video files. ``archive_file_count`` is the file tally. Using the
+    same unit for both counts keeps ``total_memories`` conserved across an
+    archive that packs N memories into one video.
+    """
     active_count: int
     archive_count: int
     total_memories: int
@@ -47,3 +53,4 @@ class SystemStats:
     total_size: int
     compression_ratio: float
     avg_salience: float
+    archive_file_count: int = 0

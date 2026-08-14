@@ -19,7 +19,7 @@ fact, **not** a `repo_map` graph metric. Pinned as a set by
 | `query_memory` | `(query, k=…, include_archive=…, user_id=None)` | Searches active **and** archives |
 | `archive_memories` | `(age_days=None, min_salience=None, user_id=None)` | **Mutating** — deletes from active after encoding |
 | `recall_memory` | `(archive_file, content, user_id=None)` | Re-adds the memory to active |
-| `get_stats` | `(user_id=None) -> Dict[str, Any]` | See the `archive_count` caveat below |
+| `get_stats` | `(user_id=None) -> Dict[str, Any]` | `archive_count` is memories; `archive_file_count` is files |
 
 ### Scheduler (2)
 
@@ -43,9 +43,9 @@ fact, **not** a `repo_map` graph metric. Pinned as a set by
 > database after encoding them into a video. With `user_id` omitted it operates on the
 > `"default"` key.
 
-> **`get_stats().archive_count` counts archive FILES, not archived memories**, so
-> `total_memories` (`active_count + archive_count`) mixes units and is not conserved
-> across an archive that packs N memories into one video. Known issue.
+> **`get_stats().archive_count` is a memory count.** `archive_file_count` is the
+> number of video files. `total_memories` (`active_count + archive_count`) is
+> conserved across an archive that packs N memories into one video.
 
 ---
 
@@ -149,4 +149,4 @@ Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_m
 | Claim | Value | Source |
 |---|---|---|
 | totalExports | 31 | dependency-graph.json |
-| totalTypeScriptFiles | 15 | dependency-graph.json |
+| totalTypeScriptFiles | 18 | dependency-graph.json |

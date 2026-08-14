@@ -52,13 +52,16 @@ second memory whenever the two land in different sectors.
 tools/call archive_memories(age_days, min_salience, user_id=None)
    └─► RememberSystem.archive_old_memories
          │
+         ├─ acquire _archive_lock                    (one archival at a time)
          ├─ acquire _write_lock                      (no interleaved add/forget)
-         ├─ SELECT eligible memories                 age + salience filter
-         ├─ MemvidEncoder ──► user_<key>_<ts>.mp4
-         │                    user_<key>_<ts>.faiss
-         │                    user_<key>_<ts>.json
-         ├─ archive_index[_archive_key(user_id)][ts] = {...}   ◄── registration
-         ├─ DELETE eligible FROM memories             inside `with conn:` (atomic)
+         ├─ SELECT id, content                       age + salience filter
+         ├─ release _write_lock
+         ├─ MemvidEncoder in a worker thread ──► user_<key>_<ts>.mp4
+         │   stdout → stderr                     user_<key>_<ts>.faiss
+         │   leftovers deleted on failure        user_<key>_<ts>.json
+         ├─ re-acquire _write_lock
+         ├─ archive_index[_archive_key(user_id)][ts] = {..., memory_count}
+         ├─ DELETE snapshot ids FROM memories         inside `with conn:` (atomic)
          └─ return ArchiveStats
 ```
 
@@ -77,20 +80,21 @@ Filenames normalize `None` → `"default"`; `_archive_key` makes the index agree
 query(query, k, include_archive=True)
    ├─► active: openmemory semantic search ──────────────┐
    └─► archive (if _archive_key(user_id) in index):     │
-         for each archive:
-           _get_retriever(video, index)   ◄── cached: FAISS + mp4 reopen is expensive
-           retriever.search(query)                      │
+         for each archive (in parallel worker threads):
+           _get_retriever(video_file, index_file)  ◄── LRU-cached
+           retriever.search_with_metadata(query)     real scores, not List[str]
                                                         ▼
                                         merged List[HybridMemoryResult]
                                         each tagged MemoryLocation.ACTIVE | ARCHIVE
 ```
 
-`recall_memory` is the return leg: it reads the named archive, then **re-adds** the content
-to active storage, so a recalled memory is live again rather than merely displayed.
+`recall_memory` is the return leg: it **resolves `archive_file` against the index**
+(never opens an arbitrary path), then re-adds the content to active storage.
 
 ```
 recall_from_archive(archive_file, content)
-   └─► add_memory(content, metadata={"recalled_from": archive_file})
+   ├─► _lookup_archive(archive_file)     FileNotFoundError if unknown
+   └─► add_memory(content, metadata={"recalled_from": <resolved path>})
 ```
 
 ---

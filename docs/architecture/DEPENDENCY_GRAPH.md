@@ -8,8 +8,9 @@ Derived from `repo_map.py map`'s `dependency-graph.json`. First-party edges only
 ```
 server.py  (entry root)
    ├─► remember/system.py ──► remember/types.py        (leaf)
+   │                     └──► remember/video.py        (leaf)
    ├─► remember/scheduler.py                           (leaf)
-   └─► remember/file_indexer.py                        (leaf)
+   └─► remember/file_indexer.py ──► remember/video.py  (leaf)
 
 remember/__init__.py ──► remember/system.py            (re-export)
 example.py ──► remember/__init__.py                    (orphan: nothing imports example.py)
@@ -23,8 +24,9 @@ chain (`server → system → types`), and three leaves.
 | Module | First-party imports | External |
 |---|---|---|
 | `server.py` | `remember/system.py`, `remember/scheduler.py`, `remember/file_indexer.py` | `fastmcp` |
-| `remember/system.py` | `remember/types.py` | `openmemory`, `openmemory.embeddings`, `openmemory.types`, `memvid` |
-| `remember/file_indexer.py` | — | `memvid` |
+| `remember/system.py` | `remember/types.py`, `remember/video.py` | `openmemory`, `openmemory.embeddings`, `memvid` (via video) |
+| `remember/file_indexer.py` | `remember/video.py` | `memvid` (via video) |
+| `remember/video.py` | — | `memvid` (lazy) |
 | `remember/scheduler.py` | — | — |
 | `remember/types.py` | — | — |
 | `remember/__init__.py` | `remember/system.py` | — |
@@ -54,7 +56,9 @@ real process boundary rather than the module graph.
   preserving type hints.
 - **`remember/scheduler.py` has no first-party imports** because it is handed a
   `RememberSystem` rather than importing one. That is what makes it independently testable.
-- **`remember/types.py` is a true leaf** — it can never participate in a cycle.
+- **`remember/file_indexer.py` imports `remember/video.py`** so it is no longer a
+  graph leaf; `video.py` is. The shared module exists so the two memvid call
+  sites cannot drift on constructor names or stdout isolation.
 
 ## Verification
 
@@ -65,5 +69,5 @@ Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_m
 |---|---|---|
 | runtimeCircularDeps | 0 | dependency-graph.json |
 | typeOnlyCircularDeps | 0 | dependency-graph.json |
-| totalTypeScriptFiles | 15 | dependency-graph.json |
+| totalTypeScriptFiles | 18 | dependency-graph.json |
 | entryRoots | 1 | dependency-graph.json |

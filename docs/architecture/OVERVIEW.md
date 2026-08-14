@@ -37,12 +37,13 @@ The file-index group is a second, independent memvid application: it chunks and 
 server.py              MCP surface — the 13 tools, lazy singletons, stdio transport
 remember/
   system.py            RememberSystem — the hybrid active+archive manager
+  video.py             Shared memvid helpers (stdout isolation, encoder, LRU cache)
   file_indexer.py      FileIndexer — the file-chunking/video-index application
   scheduler.py         ArchivalScheduler — periodic archival
   types.py             Dataclasses crossing the boundary
   __init__.py          Re-exports RememberSystem
 example.py             Standalone demo (orphan by design — nothing imports it)
-tests/                 8 files
+tests/                 pytest suite
 ```
 
 `server.py` is the only entry root. Everything reachable hangs off it; `example.py` is
@@ -52,14 +53,12 @@ the single file with no importer, which is correct for a demo script.
 
 | | |
 |---|---|
-| Python files (tracked) | 15 |
-| Lines of code | 2,682 |
-| Exported symbols | 31 |
+| Python files (tracked) | 18 |
 | Entry roots | 1 (`server.py`) |
 | Runtime circular dependencies | 0 |
 | Files with no importer | 1 (`example.py`) |
 | MCP tools | 13 *(source-parsed, not a graph metric)* |
-| Collected tests | 10 *(from a real `pytest` run, not a graph metric)* |
+| Collected tests | 29 *(from a real `pytest` run, not a graph metric)* |
 
 ## Operating constraints worth knowing before you read the code
 
@@ -92,8 +91,8 @@ Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_m
 
 | Claim | Value | Source |
 |---|---|---|
-| totalTypeScriptFiles | 15 | dependency-graph.json |
-| totalLinesOfCode | 2682 | dependency-graph.json |
+| totalTypeScriptFiles | 18 | dependency-graph.json |
+| totalLinesOfCode | 3268 | dependency-graph.json |
 | totalExports | 31 | dependency-graph.json |
 | entryRoots | 1 | dependency-graph.json |
 | runtimeCircularDeps | 0 | dependency-graph.json |

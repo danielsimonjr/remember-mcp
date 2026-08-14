@@ -1,6 +1,6 @@
 [project]
 name = "remember-mcp"
-version = "1.1.1"
+version = "1.2.0"
 description = "Hybrid memory MCP server combining OpenMemory (active) and memvid (archive)"
 readme = "README.md"
 requires-python = "==3.13.*"
@@ -14,7 +14,6 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "openmemory-python>=1.0.0",
     "memvid>=0.1.4",
-    "schedule>=1.2.0",
 ]
 
 [project.urls]
@@ -34,11 +33,12 @@ packages = ["remember"]
 no-build-package = ["scipy", "numpy"]
 
 [tool.uv.sources]
-memvid = { git = "https://github.com/danielsimonjr/memvid.git", branch = "main" }
+memvid = { git = "https://github.com/danielsimonjr/memvid.git", rev = "1deb9b29f4a594900d1243648fc8b1546cc00be5" }
 
 [tool.pytest.ini_options]
 # async tests use pytest-asyncio in auto mode (no @pytest.mark.asyncio needed)
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 
 [dependency-groups]

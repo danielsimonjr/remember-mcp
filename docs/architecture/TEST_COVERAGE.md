@@ -1,7 +1,7 @@
 # Test Coverage
 
-**10 collected tests across 8 files, carrying 23 assertions.** Both figures come from
-running the suite and parsing it, not from a graph metric.
+**29 collected tests across 10 test modules.** Both figures come from
+running the suite (`uv run pytest -q` → 29 passed), not from a graph metric.
 
 The suite was rebuilt in v1.1.1. Before that it was **4 collected tests carrying 2
 assertions between them** — and that is not incidental history, it is the reason two real
@@ -9,16 +9,18 @@ bugs shipped. Read the gaps section with that in mind.
 
 ## What runs
 
-| File | Tests | Asserts | What it actually proves |
-|---|---:|---:|---|
-| `test_archival.py` | 4 | 12 | Archive selection, no-op safety, **default-user archives are registered**, and confinement to `tmp_path` |
-| `test_recall.py` | 2 | 6 | Archive → recall round trip restores to active; unknown archive does not inflate active |
-| `test_tool_contract.py` | 2 | 2 | All 13 MCP tools registered, each with a description |
-| `test_handshake_timing.py` | 1 | 2 | Real server spawn + `initialize` under a 10 s budget |
-| `test_complete.py` | 1 | **0** | ⚠ Nothing — see gaps |
-| `test_file_indexing.py` | **0** | 0 | ⚠ Not collected — see gaps |
-| `list_tools.py` | — | 0 | Manual inspection script (not a test) |
-| `__init__.py` | — | 0 | Package marker |
+| File | Tests | What it actually proves |
+|---|---:|---|
+| `test_archival.py` | 7 | Archive selection, default-user registration, stats conservation, `age_days=0`, hybrid query, empty content |
+| `test_recall.py` | 3 | Archive → recall round trip; unknown archive / path traversal do not invent memories |
+| `test_tool_contract.py` | 2 | All 13 MCP tools registered, each with a description |
+| `test_handshake_timing.py` | 1 | Real server spawn + `initialize` under a 10 s budget |
+| `test_complete.py` | 2 | Scheduler start/stop/`run_now`; rejects nonpositive interval |
+| `test_file_indexing.py` | 10 | Allow-list, dotfiles, glob confinement, binary/size, metadata, round trip |
+| `test_video.py` | 3 | `search_with_scores` does not unpack strings; sidecar chunk counts |
+| `test_version.py` | 1 | `__version__` matches `pyproject.toml` |
+| `list_tools.py` | — | Manual inspection script (not a test) |
+| `__init__.py` | — | Package marker |
 
 ## The tests that are load-bearing
 
@@ -39,33 +41,23 @@ made the server unusable while every unit test stayed green.
 
 ## Gaps that matter
 
-### `test_file_indexing.py` collects zero tests
+### `test_file_indexing.py` covers FileIndexer
 
-79 lines defining `async def main()` under `if __name__ == "__main__"`. pytest collects
-nothing from it, so `FileIndexer` — 555 lines, the largest module in the repo — has **no
-automated coverage at all**. It is exercised only by running the file by hand.
+Allow-list, dotfiles, glob confinement, binary/size rejection, atomic metadata
+quarantine, and a real index+search round trip. The previous body sat under
+`__main__` and collected nothing.
 
-This is the same shape as the two files deleted in v1.1.1: named `test_*`, sitting in
-`tests/`, enforcing nothing.
+### `test_complete.py` covers ArchivalScheduler
 
-### `test_complete.py` asserts nothing
+start / `run_now` / stop, isolated to `tmp_path`. The previous `test_phase2`
+asserted nothing and wrote `test_phase2.db` into the working directory.
 
-162 lines, one collected test, zero assertions. It prints a six-stage walkthrough and
-passes as long as nothing raises. It does exercise real paths (`RememberSystem` +
-`ArchivalScheduler`), so it has smoke value — but it cannot distinguish correct output
-from wrong output.
-
-It also writes `test_phase2.db` and `test_archives/` into the **current working
-directory** rather than a temp dir.
-
-### Untested surface
+### Gaps that remain
 
 | Area | State |
 |---|---|
-| `FileIndexer` (all 6 file-index tools) | No collected tests |
-| `ArchivalScheduler` start/stop/run_now | No direct tests |
-| `query_memory` archive-merge path | Not directly asserted |
-| `get_stats` unit semantics | Not asserted — and the `archive_count` field is known to mix units |
+| MCP tool *invocation* (not just registration) | Not driven through FastMCP in-process |
+| `query_memory` MCP wrapper serialization | Covered at the Python layer by `test_query_reaches_archived_memories` |
 
 ## What the rebuild fixed
 
@@ -94,8 +86,8 @@ Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_m
 | Claim | Value | Source |
 |---|---|---|
 | testOnlyFiles | 1 | dependency-graph.json |
-| totalTypeScriptFiles | 15 | dependency-graph.json |
+| totalTypeScriptFiles | 18 | dependency-graph.json |
 
-> Collected-test and assertion counts (10 / 23) are **not** graph metrics — they come from
-> running `pytest` and parsing the test modules with `ast`. Stated here with their basis so
-> a reader can tell a gate-enforced number from a hand-verified one.
+> Collected-test count (29) is **not** a graph metric — it comes from
+> running `pytest`. Stated here with its basis so a reader can tell a
+> gate-enforced number from a hand-verified one.
