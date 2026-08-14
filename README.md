@@ -271,7 +271,11 @@ to an allow-list of root directories.
   e.g. `.env`, `.ssh/id_rsa`, `.aws/credentials`) are rejected by default.
   Pass `index_dotfiles=True` on `index_file` / `index_directory` (or via the
   MCP tool argument) to opt in for a single call.
-- Requests that violate either constraint raise `PermissionError` from the
+- **Size caps:** a single file larger than 32 MiB is refused; `index_directory`
+  stops after 500 files. Both are constructor-overridable.
+- **Binary / non-UTF-8** files are refused (NUL bytes or a failed UTF-8 decode).
+  PDF and EPUB go through memvid's own extractors, not the text path.
+- Requests that violate a constraint raise `PermissionError` from the
   Python API and return `{"error": "permission_denied", "message": "..."}`
   from the MCP tool layer.
 
@@ -297,7 +301,9 @@ The previous commands here (`python test_complete.py`, `python test_file_indexin
 
 ## Recent updates
 
-See [CHANGELOG.md](CHANGELOG.md) for recent changes — lazy imports for sub-handshake-window startup, stdout-pollution fix.
+See [CHANGELOG.md](CHANGELOG.md) for recent changes — v1.2.0 closed archive-search,
+recall, stats-unit, and stdio-during-encode bugs; lazy imports still keep the
+handshake under the startup window.
 
 ## License
 

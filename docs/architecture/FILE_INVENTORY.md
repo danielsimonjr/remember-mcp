@@ -3,37 +3,38 @@
 Every tracked Python file, its area, and its disposition. Areas and dispositions come from
 `repo_map`'s `file-inventory.json`; the commentary is hand-written.
 
-**15 tracked Python files · 2,682 lines.**
+**16 tracked Python files.** Line counts drift; regenerate with `repo_map.py map`.
 
-## `src` — 7 files
+## `src`
 
-| File | LOC | Disposition | Role |
-|---|---:|---|---|
-| `server.py` | 475 | **entry root** | MCP surface; 13 tools; lifecycle |
-| `remember/system.py` | 657 | reachable | `RememberSystem` — hybrid active+archive manager |
-| `remember/file_indexer.py` | 555 | reachable | `FileIndexer` — independent file/video index |
-| `remember/scheduler.py` | 150 | reachable | `ArchivalScheduler` |
-| `remember/types.py` | 49 | reachable | Boundary dataclasses; leaf module |
-| `remember/__init__.py` | 9 | reachable | Re-exports `RememberSystem` |
-| `example.py` | 113 | **orphan** | Standalone demo — orphan by design |
+| File | Disposition | Role |
+|---|---|---|
+| `server.py` | **entry root** | MCP surface; 13 tools; lifecycle |
+| `remember/system.py` | reachable | `RememberSystem` — hybrid active+archive manager |
+| `remember/video.py` | reachable | Shared memvid import isolation, encoder factory, retriever LRU |
+| `remember/file_indexer.py` | reachable | `FileIndexer` — independent file/video index |
+| `remember/scheduler.py` | reachable | `ArchivalScheduler` |
+| `remember/types.py` | reachable | Boundary dataclasses; leaf module |
+| `remember/__init__.py` | reachable | Re-exports `RememberSystem` |
+| `example.py` | **orphan** | Standalone demo — orphan by design |
 
 `example.py` is the repo's only no-importer file. That is correct: it is a script to run,
 not a module to import. It is *not* a deletion candidate.
 
-## `tests` — 8 files
+## `tests`
 
-| File | LOC | Collected tests | Notes |
-|---|---:|---:|---|
-| `tests/test_archival.py` | 152 | 4 | Rewritten — isolated to `tmp_path`, real assertions |
-| `tests/test_complete.py` | 162 | 1 | ⚠ **0 assertions** — see `TEST_COVERAGE.md` |
-| `tests/test_handshake_timing.py` | 94 | 1 | Spawns the real server; asserts a 10 s budget |
-| `tests/test_recall.py` | 88 | 2 | Rewritten — builds its own archive, asserts round trip |
-| `tests/test_tool_contract.py` | 78 | 2 | Pins all 13 tools; mutation-verified |
-| `tests/test_file_indexing.py` | 79 | **0** | ⚠ Not collected — body sits under `__main__` |
-| `tests/list_tools.py` | 20 | — | Manual inspection script; not named `test_*`, never collected |
-| `tests/__init__.py` | 1 | — | Package marker |
-
-**10 collected tests** (verified by running `pytest`, not a graph metric).
+| File | Notes |
+|---|---|
+| `tests/test_archival.py` | Archive selection, default-user registration, stats conservation, `age_days=0`, hybrid query |
+| `tests/test_complete.py` | Scheduler start/stop/`run_now` in `tmp_path` |
+| `tests/test_handshake_timing.py` | Spawns the real server; asserts a 10 s budget |
+| `tests/test_recall.py` | Archive → recall round trip; unknown archive does not invent a memory |
+| `tests/test_tool_contract.py` | Pins all 13 tools; mutation-verified |
+| `tests/test_file_indexing.py` | FileIndexer security + round trip |
+| `tests/test_video.py` | Retriever score unpacking / sidecar counts |
+| `tests/test_version.py` | `__version__` matches `pyproject.toml` |
+| `tests/list_tools.py` | Manual inspection script; not named `test_*`, never collected |
+| `tests/__init__.py` | Package marker |
 
 ## Not tracked, but present on disk
 
@@ -69,7 +70,7 @@ Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_m
 
 | Claim | Value | Source |
 |---|---|---|
-| totalTypeScriptFiles | 15 | dependency-graph.json |
-| totalLinesOfCode | 2682 | dependency-graph.json |
+| totalTypeScriptFiles | 18 | dependency-graph.json |
+| totalLinesOfCode | 3268 | dependency-graph.json |
 | orphanedFiles | 1 | dependency-graph.json |
 | entryRoots | 1 | dependency-graph.json |

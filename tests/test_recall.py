@@ -72,17 +72,28 @@ async def test_recall_of_unknown_archive_does_not_corrupt_active(tmp_path):
     await system.add_memory("a real memory", tags=["keep"])
     before = await system.get_stats()
 
-    try:
+    with pytest.raises(FileNotFoundError, match="Unknown archive"):
         await system.recall_from_archive(
             archive_file="user_default_0000000000",
             content="something that was never archived",
             user_id=None,
         )
-    except Exception:
-        # Raising is an acceptable outcome; silently inventing a memory is not.
-        pass
 
     after = await system.get_stats()
-    assert after.active_count <= before.active_count + 1, (
-        "recall from a nonexistent archive inflated active storage"
+    assert after.active_count == before.active_count, (
+        "recall from a nonexistent archive invented a memory in active storage"
     )
+
+
+@pytest.mark.anyio
+async def test_recall_rejects_path_traversal(tmp_path):
+    """Client-supplied archive_file is matched against the index, never opened."""
+    system = _system(tmp_path)
+    before = await system.get_stats()
+    with pytest.raises(FileNotFoundError):
+        await system.recall_from_archive(
+            archive_file="../../etc/passwd",
+            content="should never be stored",
+        )
+    after = await system.get_stats()
+    assert after.active_count == before.active_count

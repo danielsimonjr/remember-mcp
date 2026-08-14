@@ -66,16 +66,15 @@ async def test_archives_only_low_salience_memories(tmp_path):
     assert after.active_count == result.active_remaining, (
         "get_stats disagrees with the ArchiveStats the operation returned"
     )
-
-    # NOTE: deliberately NOT asserting `after.total_memories == before.total_memories`.
-    # `SystemStats.archive_count` counts archive FILES, not archived memories, and
-    # `total_memories` is `active_count + archive_count` — so it adds memories to
-    # files and cannot be conserved across an archive that packs N memories into one
-    # video. That mixed unit is a real (separate, lower-severity) defect; asserting
-    # conservation here would be asserting something the type cannot deliver.
-    # Conservation of the DATA is covered by
-    # test_default_user_archive_is_recorded_not_orphaned, which proves the archive
-    # is registered and visible rather than silently dropped.
+    assert after.total_memories == before.total_memories, (
+        "total_memories must be conserved: archive_count is a memory count, "
+        "not a file count, so packing N memories into one video must not "
+        f"drop the total (before={before.total_memories}, after={after.total_memories}, "
+        f"archive_count={after.archive_count}, archive_file_count={after.archive_file_count})"
+    )
+    if result.archived_count > 0:
+        assert after.archive_file_count >= 1
+        assert after.archive_count == result.archived_count
 
 
 @pytest.mark.anyio
@@ -150,3 +149,49 @@ async def test_does_not_touch_the_repository_database(tmp_path):
 
     stray = [p.name for p in tmp_path.parent.glob("remember_mcp.db")]
     assert not stray, f"test wrote outside its tmp dir: {stray}"
+
+
+@pytest.mark.anyio
+async def test_query_reaches_archived_memories(tmp_path):
+    """Archive-query used MemvidRetriever(video_path=...) which is not the
+    constructor's real signature (video_file=). That TypeError was swallowed
+    per-archive, so hybrid search silently dropped every archived hit.
+    """
+    system = _system(tmp_path)
+    content = "alpha runbook for the staging cluster credentials"
+    await system.add_memory(content, tags=["t"])
+    archived = await system.archive_old_memories(age_days=0, min_salience=1.0)
+    assert archived.archived_count >= 1, "precondition: memory must archive"
+
+    results = await system.query("staging cluster runbook", k=5, include_archive=True)
+    assert results, "hybrid query returned nothing for an archived memory"
+    assert any(r.location.value == "archive" for r in results), (
+        "archived memory was not in hybrid results — retriever construction "
+        "or score unpacking is still wrong"
+    )
+    system.close()
+
+
+@pytest.mark.anyio
+async def test_age_days_zero_does_not_fall_back_to_default(tmp_path):
+    """``age_days=0`` must mean 'archive now', not 'use the 60-day default'.
+
+    ``age_days or self.archive_threshold_days`` treats 0 as missing. A system
+    configured with a 60-day threshold would then refuse to archive a brand-new
+    memory even when the caller explicitly passed 0.
+    """
+    system = _system(tmp_path, archive_threshold_days=60, archive_min_salience=1.0)
+    await system.add_memory("archive me immediately", tags=["t"])
+
+    result = await system.archive_old_memories(age_days=0, min_salience=1.0)
+    assert result.archived_count == 1, (
+        "age_days=0 was treated as missing and fell back to the 60-day default"
+    )
+
+
+@pytest.mark.anyio
+async def test_empty_content_is_rejected(tmp_path):
+    system = _system(tmp_path)
+    with pytest.raises(ValueError, match="non-empty"):
+        await system.add_memory("   ")
+

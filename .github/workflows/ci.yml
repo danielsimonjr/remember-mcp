@@ -23,10 +23,8 @@ jobs:
         # server actually ships on.
         os: [ubuntu-latest, windows-latest]
 
-    # Run every `run:` step under bash on BOTH platforms. Windows would otherwise
-    # default to PowerShell, which cannot parse the bash idiom below
-    # (`pytest -q || [ $? -eq 5 ]`, which tolerates pytest's exit-5 "no tests
-    # collected") — it fails with a ParserError before any test runs.
+    # Run every `run:` step under bash on BOTH platforms so the same
+    # commands work without a PowerShell translation.
     defaults:
       run:
         shell: bash
@@ -51,6 +49,6 @@ jobs:
       # dependency regression could not be detected by the syntax gate alone.
       - run: pip install --disable-pip-version-check uv
       - run: uv sync --frozen
-      # `|| [ $? -eq 5 ]` tolerates pytest's exit-5 ("no tests collected") — this
-      # is the bash idiom the `defaults.run.shell: bash` above exists for.
-      - run: uv run pytest -q || [ $? -eq 5 ]
+      # Exit 5 ("no tests collected") is a failure: an empty suite is how
+      # this repo previously shipped two real bugs with a green CI.
+      - run: uv run pytest -q

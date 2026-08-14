@@ -101,17 +101,16 @@ read, in the same function**, or the two conventions drift apart silently.
 - **`_write_lock`** (an `asyncio.Lock`) serializes archive/add/forget so a SELECT of
   eligible memories cannot interleave with a concurrent write before the matching DELETE.
 - The DELETE runs inside `with conn:` so it commits or rolls back atomically.
-- **`_retriever_cache`** keys `MemvidRetriever` instances by `(video_path, index_path)`,
-  because constructing one reloads a FAISS index and reopens the mp4.
+- **`_retriever_cache`** keys `MemvidRetriever` instances by `(video_path, index_path)`
+  via a bounded LRU in `remember.video.RetrieverCache`. Construction uses memvid's
+  real kwargs (`video_file` / `index_file`); the previous `video_path=` call raised
+  and was swallowed, so archive search returned nothing.
 
 ## Known architectural debts
 
-- **`SystemStats.archive_count` counts archive *files*, not archived memories**, and
-  `total_memories = active_count + archive_count` therefore adds memories to files. The
-  number is not conserved across an archive that packs N memories into one video.
 - **`logger` is defined at module scope in two files** (`system.py`, `file_indexer.py`).
   Harmless — each is a separate `logging.getLogger(__name__)` — but it is the one
-  duplicate symbol in the repo.
+  duplicate symbol in the repo. `remember/video.py` adds a third, same idiom.
 
 ## Verification
 
