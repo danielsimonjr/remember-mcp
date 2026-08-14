@@ -4,6 +4,97 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-08-13
+
+Two crash/data-visibility bugs in the core memory path, plus the reason neither
+was ever caught: **the test suite asserted nothing.**
+
+### Fixed — `add_memory` raised `ValueError` on the second memory
+
+`add_memory` crashed with `ValueError: shapes (384,) and (768,) not aligned` as
+soon as two memories classified into different sectors — which is the normal
+path, not an edge case.
+
+openmemory maps embedding models **per sector** (`embeddings.py`): `REFLECTIVE`
+gets the 768-dimension `all-mpnet-base-v2`, every other sector gets the
+384-dimension `all-MiniLM-L6-v2`. But `MemorySystem.add_memory` then calls
+`graph.create_similarity_waypoint`, which cosine-compares the incoming memory
+against existing ones *regardless of sector*. Mixed dimensions meet, and numpy
+raises. Visible in the logs as two different models loading back to back
+(`Loading weights: 199/199` then `103/103`).
+
+`RememberSystem` now constructs an explicit `EmbeddingProvider` with every
+sector pinned to one model, so the vector space is uniform. Cost: `REFLECTIVE`
+memories lose mpnet's slightly stronger embeddings — the right trade against a
+space that raises.
+
+### Fixed — archiving without a user_id orphaned the archive
+
+`archive_old_memories` guarded its index update with `if user_id:`. The default
+path (`user_id=None`) — which is what the `archive_memories` **MCP tool** uses —
+wrote the `.mp4`/`.faiss`/`.json`, **deleted the memories from active storage**,
+and recorded nothing. `get_stats` then reported `archive_count=0` and
+`total_memories=0`, and query/recall could not reach them: the memories read as
+destroyed while 261 KB of their data sat on disk.
+
+Archive *filenames* had always normalized `None` → `"default"`
+(`f"user_{user_id or 'default'}_{timestamp}"`), and `_load_archive_index` parsed
+that back out — so even a restart recovered the archive under `"default"` while
+every lookup asked for `None`. Three sites disagreed about one key. Normalized
+into a single `_archive_key()` helper used by the index write and all lookups.
+
+Data was never actually lost — but it was unreachable and reported as gone.
+
+### Fixed — the test suite asserted almost nothing
+
+This is why both bugs shipped. Before: 8 test files, **4 collected tests, 2
+assertions in total** (both in `test_handshake_timing.py`, the one genuinely
+good file).
+
+- **`tests/test_tools.py` and `tests/test_tools_async.py` — deleted.** Near-identical
+  copies of each other; neither contained an `assert`; both wrapped everything in
+  `try/except` that swallowed failures; neither was collectable by pytest (their
+  bodies sat under `if __name__ == "__main__"`); and both called
+  `app.get_tools()`, the **fastmcp 2.x** API, while this project requires
+  `fastmcp>=3.2.0` where it is `list_tools()`. Dead *and* broken *and* silent.
+- **`tests/test_tool_contract.py` — added.** Pins the full 13-tool MCP surface as a
+  set and requires every tool to carry a description. Mutation-verified: removing
+  one `@app.tool()` decorator makes it fail and name the missing tool.
+- **`tests/test_archival.py` — rewritten.** Had zero assertions and ran against
+  `remember_mcp.db` in the repo root (the real 184 KB working database), calling
+  `archive_old_memories()` on it — destructive and non-deterministic. Now builds
+  its corpus in `tmp_path`. Includes the regression test for the orphaned-archive
+  bug, mutation-verified against the restored `if user_id:` guard.
+- **`tests/test_recall.py` — rewritten.** Had zero assertions, used the real
+  database, and hardcoded `archive_file = "user_default_1762577738"` — an archive
+  from one machine at one instant, which exists nowhere else. It now creates its
+  own archive and asserts the round trip restores the memory.
+
+**4 collected tests → 10, and they assert.**
+
+### Removed — `requirements.txt`
+
+A second, unmaintained dependency list that omitted **`mcp`, `pydantic`
+(including its exact `==2.13.4` pin) and `scipy`**, and tracked `memvid`'s
+`main` branch instead of the commit pinned in `uv.lock`. `README.md` told users
+to `pip install -r requirements.txt` **twice**, so the documented install
+produced an environment that did not match CI. `pyproject.toml` + `uv.lock` are
+authoritative (CI runs `uv sync --frozen`); README now documents `uv sync`. This
+is the same defect class as the `setup.py` removed in 1.1.0 — a duplicate source
+of truth that can only drift.
+
+Also corrected the README's Development section, which named
+`python test_complete.py` / `test_file_indexing.py` / `list_tools.py` — paths
+that do not exist, since those files live under `tests/`.
+
+### Known issues (recorded, not fixed here)
+
+- `SystemStats.archive_count` counts archive **files**, not archived memories, so
+  `total_memories = active_count + archive_count` adds memories to files and is
+  not conserved across an archive that packs N memories into one video.
+- `tests/test_complete.py` and `tests/test_file_indexing.py` still contain no
+  assertions; the latter is not collected by pytest at all.
+
 ## [1.1.0] - 2026-08-13
 
 Rolls up every change since `v1.0.3` — a long run of security work that had never been

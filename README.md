@@ -70,9 +70,18 @@ New File → Index → QR Video → Semantic Search
 
 ## Installation
 
+Dependencies are declared in `pyproject.toml` and locked in `uv.lock`, which is
+what CI installs from:
+
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
+
+> `requirements.txt` was removed in v1.1.1. It was a second, unmaintained
+> dependency list that omitted `mcp`, `pydantic` (including its exact
+> `==2.13.4` pin) and `scipy`, and tracked `memvid`'s `main` branch instead of
+> the commit pinned in `uv.lock` — so following it produced an incomplete
+> environment that did not match CI.
 
 ## Quick Start
 
@@ -250,18 +259,22 @@ to an allow-list of root directories.
 ## Development
 
 ```bash
-# Install dev dependencies
-pip install -r requirements.txt
+# Install dependencies (from uv.lock — same as CI)
+uv sync
 
-# Run memory tests
-python test_complete.py
+# Run the test suite — this is the gate CI runs
+uv run pytest -q
 
-# Run file indexing tests
-python test_file_indexing.py
+# Run a single test file
+uv run pytest tests/test_tool_contract.py -v
 
-# List available MCP tools
-python list_tools.py
+# List available MCP tools (manual inspection script, not a test)
+uv run python tests/list_tools.py
 ```
+
+The previous commands here (`python test_complete.py`, `python test_file_indexing.py`,
+`python list_tools.py`) named paths that do not exist — those files live under
+`tests/`, and running them directly bypasses pytest entirely.
 
 ## Recent updates
 

@@ -26,10 +26,42 @@ logger = logging.getLogger(__name__)
 try:
     with contextlib.redirect_stdout(sys.stderr):
         from openmemory import MemorySystem as OpenMemory
+        from openmemory import SectorType
+        from openmemory.embeddings import EmbeddingProvider
         from openmemory.types import MemoryResult
 except ImportError:
     raise ImportError(
         "OpenMemory not found. Install with: pip install -e ../openmemory-python"
+    )
+
+# Every sector must embed with the SAME model, because openmemory compares
+# embeddings ACROSS sectors.
+#
+# openmemory's default map (embeddings.py) assigns REFLECTIVE the 768-dimension
+# `all-mpnet-base-v2` while every other sector gets the 384-dimension
+# `all-MiniLM-L6-v2`. `MemorySystem.add_memory` then calls
+# `graph.create_similarity_waypoint`, which cosine-compares the incoming
+# memory against existing ones regardless of sector — so as soon as one
+# REFLECTIVE memory and one non-REFLECTIVE memory coexist, that comparison gets
+# a 384-vector and a 768-vector and raises:
+#
+#     ValueError: shapes (384,) and (768,) not aligned
+#
+# This is not an edge case: it is the second `add_memory` call whenever the two
+# memories classify into different sectors, which is the normal path. Pinning
+# one model makes the vector space uniform and the comparison well-defined.
+#
+# Cost of the choice: REFLECTIVE memories lose mpnet's slightly stronger
+# embeddings. That is the right trade — a uniformly-384 space that works beats a
+# mixed space that raises. Revisit only if openmemory starts comparing
+# within-sector.
+UNIFORM_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+
+
+def _uniform_embedding_provider() -> "EmbeddingProvider":
+    """An EmbeddingProvider with every sector pinned to one model."""
+    return EmbeddingProvider(
+        models={sector: UNIFORM_EMBEDDING_MODEL for sector in SectorType}
     )
 
 # Import memvid (same stdout-isolation rationale)
@@ -80,8 +112,14 @@ class RememberSystem:
         # Create archive directory
         self.archive_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize active memory (OpenMemory)
-        self.active = OpenMemory(db_path=active_db)
+        # Initialize active memory (OpenMemory).
+        # The explicit provider is load-bearing — see UNIFORM_EMBEDDING_MODEL above.
+        # Without it, openmemory's per-sector default mixes 384- and 768-dimension
+        # models and add_memory raises on the first cross-sector comparison.
+        self.active = OpenMemory(
+            db_path=active_db,
+            embedding_provider=_uniform_embedding_provider(),
+        )
 
         # Archive index: maps user_id → archive file info
         self.archive_index: Dict[str, Dict[str, Any]] = {}
@@ -112,6 +150,34 @@ class RememberSystem:
             )
             self._retriever_cache[key] = retriever
         return retriever
+
+    @staticmethod
+    def _archive_key(user_id: Optional[str]) -> str:
+        """Normalize a user_id into the key used for archive bookkeeping.
+
+        Archive FILENAMES have always normalized ``None`` to ``"default"``
+        (``f"user_{user_id or 'default'}_{timestamp}"``), and
+        ``_load_archive_index`` parses that filename back out — so the on-disk
+        world has always been keyed by ``"default"``. The in-memory index and
+        every lookup, however, used the raw ``user_id``. For the default
+        (``user_id=None``) path those two never met:
+
+        * ``archive_old_memories`` guarded its index update with ``if user_id:``,
+          so a default-user archive wrote the .mp4/.faiss/.json, DELETED the
+          memories from active storage, and recorded nothing — the archive was
+          orphaned for the rest of the process.
+        * After a restart ``_load_archive_index`` did recover it, but under
+          ``"default"``, while ``query``/``_query_archives``/``recall_from_archive``
+          looked up ``None``. So it stayed unreachable.
+
+        Net effect: archiving without an explicit user_id — which is the default,
+        and what the ``archive_memories`` MCP tool passes — made memories vanish
+        from ``get_stats`` and from recall while their data sat on disk.
+
+        Normalizing in ONE place is the fix; every site now agrees with the
+        filename convention that was already there.
+        """
+        return user_id or "default"
 
     def _load_archive_index(self) -> None:
         """Load existing archive files"""
@@ -208,7 +274,7 @@ class RememberSystem:
             ))
 
         # Query archives if enabled
-        if include_archive and user_id in self.archive_index:
+        if include_archive and self._archive_key(user_id) in self.archive_index:
             archive_results = await self._query_archives(
                 query=query,
                 user_id=user_id,
@@ -232,7 +298,7 @@ class RememberSystem:
         results = []
 
         # Get user's archives
-        user_archives = self.archive_index.get(user_id, {})
+        user_archives = self.archive_index.get(self._archive_key(user_id), {})
 
         for timestamp, archive_info in user_archives.items():
             try:
@@ -398,16 +464,17 @@ class RememberSystem:
                 compression_ratio=1.0
             )
 
-        # Update archive index
-        if user_id:
-            if user_id not in self.archive_index:
-                self.archive_index[user_id] = {}
+        # Update archive index. Unconditional: the previous `if user_id:` guard
+        # orphaned every default-user archive (see _archive_key).
+        key = self._archive_key(user_id)
+        if key not in self.archive_index:
+            self.archive_index[key] = {}
 
-            self.archive_index[user_id][str(timestamp)] = {
-                "file": str(video_path),
-                "index": str(index_path),
-                "created_at": timestamp
-            }
+        self.archive_index[key][str(timestamp)] = {
+            "file": str(video_path),
+            "index": str(index_path),
+            "created_at": timestamp
+        }
 
         # Remove from active storage. Use ``with conn:`` so the DELETE +
         # COMMIT run as a single atomic transaction; the surrounding
@@ -521,7 +588,7 @@ class RememberSystem:
         archive_size = 0
 
         if user_id:
-            user_archives = self.archive_index.get(user_id, {})
+            user_archives = self.archive_index.get(self._archive_key(user_id), {})
             archive_count = len(user_archives)
             for archive_info in user_archives.values():
                 try:
