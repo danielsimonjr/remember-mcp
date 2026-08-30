@@ -6,5 +6,5 @@ Combines OpenMemory (active) with memvid (archive)
 from .system import RememberSystem
 
 # Keep in sync with pyproject.toml [project].version — tests/test_version.py pins this.
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 __all__ = ["RememberSystem"]

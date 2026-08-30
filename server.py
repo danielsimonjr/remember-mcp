@@ -2,13 +2,18 @@
 Main MCP Server entry point for remember-mcp
 Direct tool registration without import_server
 
+Speaks MCP 2026-07-28 (stateless "MCP 2.0") via FastMCP 4 / MCP Python SDK v2.
+Modern clients discover capabilities with ``server/discover`` and send per-request
+``_meta`` instead of an ``initialize`` / ``initialized`` handshake. Legacy
+handshake-era clients remain supported during the spec grace period.
+
 Heavy dependencies (sentence-transformers, FAISS, memvid, scipy) are imported
 lazily inside ``get_system()`` / ``get_file_indexer()`` rather than at module
 top level. With eager imports + an eager ``setup()`` the server took ~82s to
-respond to its first ``initialize`` JSON-RPC message — well past Claude
-Code's ~30s MCP startup timeout, so the server appeared broken on every
-fresh launch. With lazy init the stdio handshake completes in <1s and the
-heavy work runs on the first ``tools/call`` that actually needs it.
+respond to its first protocol message — well past Claude Code's ~30s MCP startup
+timeout, so the server appeared broken on every fresh launch. With lazy init the
+stdio ``server/discover`` path completes in <1s and the heavy work runs on the
+first ``tools/call`` that actually needs it.
 """
 import asyncio
 import logging
@@ -73,7 +78,7 @@ def get_system() -> "RememberSystem":
     Get or create remember system. Imports ``RememberSystem`` /
     ``ArchivalScheduler`` lazily — these pull in openmemory, memvid,
     sentence-transformers, FAISS, and scipy, which together cost ~80s on a
-    cold start. Deferring keeps the MCP handshake sub-second.
+    cold start. Deferring keeps the MCP startup path sub-second.
     """
     global remember_system, scheduler
     if remember_system is None:
@@ -461,7 +466,7 @@ async def setup():
         This is no longer called from ``main()`` — kept for callers that want
         to force-warm the heavy dependencies (e.g. tests, benchmarks). The
         stdio server now defers initialization to the first ``tools/call``
-        that needs it so the MCP handshake completes in <1s instead of ~80s.
+        that needs it so MCP startup completes in <1s instead of ~80s.
     """
     get_system()
     get_file_indexer()
@@ -494,7 +499,7 @@ def main():
     ``RememberSystem`` and ``FileIndexer``, which transitively import
     sentence-transformers, FAISS, memvid, and scipy and load any existing
     FAISS index from disk — collectively ~80s on a cold start. That blocks
-    the stdio handshake past Claude Code's ~30s MCP startup window.
+    the stdio startup path past Claude Code's ~30s MCP startup window.
     Construction now happens lazily on the first tool invocation that needs
     it (``add_memory``, ``query_memory``, ``index_file``, etc.); tools that
     don't touch heavy state (``scheduler_status``, ``scheduler_control``)
