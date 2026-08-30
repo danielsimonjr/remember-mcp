@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-30
+
+### Changed — MCP 2026-07-28 ("MCP 2.0") protocol
+
+- Upgraded to **FastMCP 4.0.0b5** and **MCP Python SDK v2** (`mcp>=2.0`), which
+  implement the stateless `2026-07-28` revision: per-request `_meta`,
+  `server/discover` capability discovery, and no required `initialize` /
+  `Mcp-Session-Id` session lifecycle.
+- Legacy `initialize` handshake clients remain supported during the spec grace
+  period (pinned by `tests/test_mcp2_protocol.py`).
+- `tests/test_handshake_timing.py` now measures `server/discover` instead of
+  `initialize`.
+- Added `tests/test_mcp2_protocol.py` for MCP 2.0 wire compliance (discover,
+  stateless `tools/list`, startup budget).
+
 ## [1.2.0] - 2026-08-14
 
 Speed, reliability, security, and maintainability pass. Several of these were
