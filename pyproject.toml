@@ -5,9 +5,9 @@ description = "Hybrid memory MCP server combining OpenMemory (active) and memvid
 readme = "README.md"
 requires-python = "==3.13.*"
 dependencies = [
-    "fastmcp==4.0.0b5",
+    "fastmcp==4.0.0",
     "mcp>=2.0,<3.0",
-    "pydantic==2.13.4",
+    "pydantic==2.13.5",
     "numpy>=2.0",
     "scipy>=1.14",
     "sentence-transformers>=2.2.2",
@@ -31,8 +31,10 @@ packages = ["remember"]
 # Prevent building these packages from source - use pre-built wheels only
 # Python 3.13 has stable wheel support for numpy >=2.0 and scipy >=1.14
 no-build-package = ["scipy", "numpy"]
-# FastMCP 4 is prerelease; keep fastmcp-slim aligned with the pinned fastmcp beta.
-constraint-dependencies = ["fastmcp-slim==4.0.0b5"]
+# Keep fastmcp-slim aligned with the pinned fastmcp: fastmcp 4.0.0 requires
+# fastmcp-slim[client,server]==4.0.0 exactly, so a drifting constraint makes the
+# resolution unsatisfiable rather than merely suboptimal.
+constraint-dependencies = ["fastmcp-slim==4.0.0"]
 
 [tool.uv.sources]
 memvid = { git = "https://github.com/danielsimonjr/memvid.git", rev = "1deb9b29f4a594900d1243648fc8b1546cc00be5" }
