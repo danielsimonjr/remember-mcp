@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-03 - fastmcp 4.0.0: the constraint, not the lockfile
+
+- Dependabot bumped `fastmcp` 4.0.0b5 -> 4.0.0 in `pyproject.toml`, and CI failed on both legs
+  with `No solution found when resolving dependencies`. The cause was NOT a stale lockfile --
+  `uv lock` failed for the same reason. `constraint-dependencies` still pinned
+  `fastmcp-slim==4.0.0b5`, while `fastmcp 4.0.0` requires `fastmcp-slim[client,server]==4.0.0`
+  exactly, so the two pins were mutually unsatisfiable.
+- Moved the constraint to `4.0.0` rather than deleting it: it exists to keep the two aligned,
+  and that intent is still correct now the release is final. Corrected the comment, which
+  still described FastMCP 4 as prerelease.
+- Verified against PyPI before changing anything: `fastmcp-slim 4.0.0` exists and is exactly
+  what `fastmcp 4.0.0` declares. `uv lock` then resolves; 36 tests pass locally.
+
 ## [Unreleased]
 
 ## [1.3.0] - 2026-08-30
