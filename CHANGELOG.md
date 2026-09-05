@@ -38,6 +38,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **TypeScript 7 removed `baseUrl`; the option was dead config here anyway.** `tsc` now errors
+  `TS5102: Option 'baseUrl' has been removed`. This tsconfig declared `baseUrl: "."` with **no
+  `paths` map**, and every import in `src/` is a package specifier resolving through
+  `node_modules`, so nothing depended on it. Deleted rather than replaced with the suggested
+  `"paths": {"*": ["./*"]}` shim, which would have re-created a resolution rule the code never used.
+- **Regenerated `bun.lock` for the Dependabot bump.** Dependabot's npm ecosystem edits
+  `package.json` only and leaves `bun.lock` untouched, so CI failed with
+  `error: lockfile had changes, but lockfile is frozen` on both runners. This is structural for
+  every Dependabot PR against a Bun repo, not specific to this bump.
+
+
 ## [1.3.0] - 2026-08-30
 
 ### Changed — MCP 2026-07-28 ("MCP 2.0") protocol
