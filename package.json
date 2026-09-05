@@ -33,7 +33,7 @@
   "devDependencies": {
     "@types/bun": "^1.2.20",
     "@types/qrcode": "^1.5.5",
-    "typescript": "^5.9.2"
+    "typescript": "^7.0.2"
   },
   "engines": {
     "bun": ">=1.1.0"
