@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-09-05
+
+### Changed — TypeScript on Bun
+
+- Replaced the Python / FastMCP / `openmemory-python` / `memvid` stack with a
+  Bun-native TypeScript implementation.
+- MCP transport now uses `@modelcontextprotocol/server` + `serveStdio`,
+  matching the author's other TypeScript MCP servers. Protocol negotiation
+  follows the SDK (`LATEST_PROTOCOL_VERSION`, currently `2025-11-25`).
+- Active memory: `bun:sqlite` with hashed embeddings (no model download),
+  five cognitive sectors, and exponential salience decay.
+- Archive + file index: QR-coded PNG frames packed with `ffmpeg` into MP4,
+  plus a JSON sidecar for semantic search (FAISS-free).
+- CI installs Bun + ffmpeg on Ubuntu and Windows; Dependabot tracks npm.
+- Removed `pyproject.toml`, `uv.lock`, and the Python package layout.
+
+### Removed
+
+- PDF/EPUB indexing (not yet ported; text and code files still work).
+- Python SBOM / `uv` lock artifacts.
+
 ## 2026-09-03 - fastmcp 4.0.0: the constraint, not the lockfile
 
 - Dependabot bumped `fastmcp` 4.0.0b5 -> 4.0.0 in `pyproject.toml`, and CI failed on both legs

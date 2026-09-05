@@ -1,0 +1,4 @@
+[test]
+preload = []
+# Isolate each file so SQLite temp paths and ffmpeg workdirs do not collide.
+smol = false

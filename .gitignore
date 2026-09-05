@@ -1,29 +1,22 @@
-# Python
+# Dependencies
+node_modules/
+.venv/
+venv/
+env/
+ENV/
+
+# Bun / build
+dist/
+*.tsbuildinfo
+
+# Python leftovers (migration)
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual environments
-venv/
-env/
-ENV/
+.eggs/
+.Python
 
 # IDEs
 .vscode/
@@ -37,11 +30,22 @@ ENV/
 *.sqlite
 *.sqlite3
 
-# Archives
+# Runtime archives / indexes
 archives/
+mcp_archives/
+demo_archives/
+file_index/
+test_file_index/
 *.mp4
+*.faiss
+
+# Generated / local JSON (keep package manifests)
 *.json
+!package.json
+!tsconfig.json
+!bunfig.toml
 !sbom.json
+!package-lock.json
 
 # Models cache
 .cache/
@@ -57,12 +61,7 @@ Thumbs.db
 
 # Logs
 *.log
-test_file_index/
-file_index/
 
 # Claude Code settings (local only)
 .claude/
 .mcp.json
-# Added by post-migration audit (2026-05-01)
-node_modules/
-.venv/
