@@ -1,0 +1,50 @@
+{
+  "name": "remember-mcp",
+  "version": "2.0.0",
+  "description": "Hybrid memory MCP server — active SQLite store + QR-video archives, running on Bun",
+  "author": "Daniel Simon Jr.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "remember-mcp": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/remember/index.ts",
+    "./server": "./src/server.ts"
+  },
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch run src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run typecheck && bun test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "qrcode": "^1.5.4",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.20",
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "memory",
+    "bun",
+    "typescript",
+    "memvid",
+    "openmemory"
+  ]
+}
