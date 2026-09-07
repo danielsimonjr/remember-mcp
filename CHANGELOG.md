@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **Bun floor raised to 1.4.2**, and a `packageManager` field added. `engines.bun`
+  still said `>=1.1.0` while CI already installed 1.4.2, so the declared floor and the
+  tested floor had drifted more than three minor versions apart. Both now say 1.4.2.
+
 ## [2.0.0] - 2026-09-05
 
 ### Changed — TypeScript on Bun

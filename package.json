@@ -35,8 +35,9 @@
     "@types/qrcode": "^1.5.5",
     "typescript": "^7.0.2"
   },
+  "packageManager": "bun@1.4.2",
   "engines": {
-    "bun": ">=1.1.0"
+    "bun": ">=1.4.2"
   },
   "keywords": [
     "mcp",
