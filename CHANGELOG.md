@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- **Dependabot no longer carries a dead npm entry.** No dependency-update ecosystem
+  can read a Bun-managed directory: `bun` rejects `lockfileVersion` 2, which Bun 1.4
+  writes, and `npm` aborts with "cannot update bun.lock. Set package-ecosystem: bun".
+  Each error recommends the other. The `npm` entry covering `/` therefore failed every
+  week from 2026-09-28, and its last successful update was #11 on 2026-09-05. The entry
+  is removed and `github-actions` is kept, so action updates continue. The config now
+  records both errors, the cost, and a checkable revisit condition. The cost is that
+  security alerts still fire, because they come from the dependency graph rather than
+  the updater, so "no open Dependabot pull requests" now partly means Dependabot cannot
+  open one. Bump a dependency with `bun outdated`, then `bun update <pkg>`, then commit
+  the regenerated `bun.lock`.
+
 - **Bun floor raised to 1.4.2**, and a `packageManager` field added. `engines.bun`
   still said `>=1.1.0` while CI already installed 1.4.2, so the declared floor and the
   tested floor had drifted more than three minor versions apart. Both now say 1.4.2.
