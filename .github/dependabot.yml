@@ -1,16 +1,31 @@
 version: 2
-updates:
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      bun-npm:
-        patterns: ["*"]
-    commit-message:
-      prefix: chore
-    labels: [dependencies, javascript]
 
+# NO DEPENDENCY-UPDATE ECOSYSTEM WORKS FOR A BUN-MANAGED DIRECTORY, so the npm entry that
+# covered "/" was REMOVED rather than left to fail every week. Both available options fail,
+# and each one's error message recommends the other:
+#   bun -> "Unsupported bun.lock 'lockfileVersion' 2". Dependabot's bundled bun reads v1,
+#          while Bun 1.4 writes v2.
+#   npm -> "npm_and_yarn ecosystem cannot update bun.lock. Set package-ecosystem: bun".
+#          This aborts during FILE FETCHING for the whole job, so nothing is proposed for any
+#          directory in the entry.
+# npm_and_yarn worked until the abort was added upstream between 2026-09-23 and 2026-09-25.
+# The last update it opened here was #11, on 2026-09-05.
+#
+# Sibling repos kept part of their entry because they hold npm-managed subdirectories with a
+# committed package-lock.json. This repo has ONE package.json and only bun.lock, so there is
+# no directory to keep and the whole entry goes. No ignore rules were lost with it.
+#
+# THE COST, stated here rather than left to be discovered: security ALERTS still fire, because
+# they come from the dependency graph and not from the updater. So "no open Dependabot pull
+# requests" now partly means "Dependabot cannot open one". A bump is a manual action:
+# `bun outdated`, then `bun update <pkg>`, then commit the regenerated bun.lock.
+#
+# REVISIT, and the condition is checkable: re-add `package-ecosystem: bun` once its bundled bun
+# reads lockfileVersion 2. Set it and watch ONE scheduled run - the failure is immediate and
+# costs nothing. Do NOT pin Bun back to 1.3.14 to get a v1 lockfile; that downgrades the
+# toolchain to work around a vendor bug.
+
+updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:

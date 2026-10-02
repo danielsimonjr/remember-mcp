@@ -18,8 +18,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows is the PRODUCTION platform for this MCP server (Daniel runs it
-        # locally on Windows), but Linux CI still matters for PRs.
+        # Windows is the PRODUCTION platform for this MCP server, which runs
+        # locally on Windows, but Linux CI still matters for PRs.
         os: [ubuntu-latest, windows-latest]
 
     defaults:
