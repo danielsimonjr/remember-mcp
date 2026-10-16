@@ -5,7 +5,7 @@ This document describes each module of remember-mcp. Each section gives the path
 ## Contents
 
 - [Server layer](#server-layer): `index.ts`, `server.ts`, `tools.ts`, `version.ts`
-- [Memory engine](#memory-engine): `system.ts`, `active-store.ts`, `archive.ts`, `embeddings.ts`, `sectors.ts`, `scheduler.ts`, `types.ts`, `index.ts`
+- [Memory engine](#memory-engine): `system.ts`, `active-store.ts`, `archive.ts`, `embeddings.ts`, `sectors.ts`, `scheduler.ts`, `types.ts`, `ensure-dir.ts`, `index.ts`
 - [File indexing](#file-indexing): `file-indexer.ts`
 - [Scaffolding](#scaffolding): `example.ts`
 - [Dependencies between components](#dependencies-between-components)
@@ -171,7 +171,7 @@ Behavior notes:
 
 - **Storage.** One table, `memories`, with the columns `id`, `content`, `user_id`, `primary_sector`, `sectors_json`, `salience`, `created_at`, `last_seen_at`, `tags_json`, `metadata_json` and `embedding` (a BLOB). The constructor adds three indexes: on `user_id`, on `salience` and on `created_at`. The table has no schema version.
 - **Pragmas.** The constructor sets WAL journaling, a busy timeout of 5000 ms, `synchronous` to `NORMAL`, and foreign keys on.
-- **Database path.** The constructor creates the parent folder of the database file. The path `:memory:` skips that step.
+- **Database path.** The constructor creates the parent folder of the database file with `ensureDir`. The path `:memory:` skips that step. A bare file name has `.` as its parent folder, and `ensureDir` accepts that folder.
 - **Initial salience.** A new memory has salience 0.85. The value is below 1.0 on purpose. A `min_salience` of 1.0 then selects fresh memories, because the rule is that salience is below the minimum.
 - **Decay.** Salience halves every 30 days since `last_seen_at`. The code computes the decay when it reads a row. The stored value does not change until a query reinforces the row.
 - **Ranking.** A score is `0.85 × similarity + 0.15 × decayed salience`. The query reads every row of the owner and computes the score in memory. The cost grows in a straight line with the number of memories.
@@ -282,6 +282,20 @@ export interface ArchiveInfo { file: string; index: string; created_at: number; 
 export type ArchiveIndex = Record<string, Record<string, ArchiveInfo>>;
 ```
 
+### src/remember/ensure-dir.ts
+
+```typescript
+export function ensureDir(dir: string): void;
+```
+
+Behavior notes:
+
+- **Purpose.** The function creates a folder and its missing parents. The function does nothing when the folder exists.
+- **Reason.** `mkdirSync` with `recursive` must accept a folder that exists. In some Bun releases on Windows, it throws `EEXIST` for `.` and `..`, and `ENOENT` for `./`. A bare file name such as `remember_mcp.db` has `.` as its parent folder.
+- **Method.** The function reads the path with `statSync`. `existsSync` can report `false` for `./`, so the function does not use it.
+- **Errors.** A path that names a file still throws, because `mkdirSync` reports it.
+- **Callers.** `ActiveStore` uses it for the database folder. `RememberSystem` uses it for the archive folder. `archive.ts` uses it for the folders of the sidecar and the video. `FileIndexer` uses it for the index folder.
+
 ### src/remember/index.ts
 
 The library barrel. The file re-exports `RememberSystem`, `FileIndexer`, `ArchivalScheduler`, `MemoryLocation`, the types `HybridMemoryResult`, `ArchiveStats`, `SystemStats` and `SectorType`, and `PKG_VERSION` under the name `VERSION`.
@@ -330,13 +344,14 @@ Each row lists the package files that a module imports. A module that imports no
 | `tools.ts` | `remember/system.ts`, `remember/scheduler.ts`, `remember/file-indexer.ts` |
 | `version.ts` | `package.json` |
 | `remember/index.ts` | `system.ts`, `file-indexer.ts`, `scheduler.ts`, `types.ts`, `version.ts` |
-| `remember/system.ts` | `active-store.ts`, `archive.ts`, `types.ts` |
-| `remember/active-store.ts` | `embeddings.ts`, `sectors.ts`, `types.ts` (type only) |
-| `remember/archive.ts` | `embeddings.ts` |
-| `remember/file-indexer.ts` | `archive.ts` |
+| `remember/system.ts` | `active-store.ts`, `archive.ts`, `ensure-dir.ts`, `types.ts` |
+| `remember/active-store.ts` | `embeddings.ts`, `ensure-dir.ts`, `sectors.ts`, `types.ts` (type only) |
+| `remember/archive.ts` | `embeddings.ts`, `ensure-dir.ts` |
+| `remember/file-indexer.ts` | `archive.ts`, `ensure-dir.ts` |
 | `remember/scheduler.ts` | `system.ts` (type only) |
 | `remember/sectors.ts` | `types.ts` |
 | `remember/embeddings.ts` | none |
+| `remember/ensure-dir.ts` | none |
 | `remember/types.ts` | none |
 | `example.ts` | `remember/index.ts` |
 
@@ -355,6 +370,6 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 23 | repo-tools map (whole repository) |
-| totalExports | 57 | repo-tools map (whole repository) |
+| totalSourceFiles | 26 | repo-tools map (whole repository) |
+| totalExports | 58 | repo-tools map (whole repository) |
 | runtimeCircularDeps | 0 | repo-tools map (whole repository) |

@@ -3,9 +3,10 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { ActiveStore } from "./active-store.ts";
+import { ensureDir } from "./ensure-dir.ts";
 import {
   encodeChunks,
   searchSidecar,
@@ -62,7 +63,7 @@ export class RememberSystem {
     this.archiveMinSalience = opts.archive_min_salience ?? 0.2;
     this.autoArchiveEnabled = opts.auto_archive_enabled ?? false;
 
-    mkdirSync(this.archiveDir, { recursive: true });
+    ensureDir(this.archiveDir);
     this.active = new ActiveStore(this.activeDb);
     this._loadArchiveIndex();
   }

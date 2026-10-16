@@ -5,7 +5,6 @@
 import { createHash } from "node:crypto";
 import {
   existsSync,
-  mkdirSync,
   readFileSync,
   renameSync,
   statSync,
@@ -21,6 +20,7 @@ import {
   resolve,
 } from "node:path";
 import { encodeChunks, searchSidecar } from "./archive.ts";
+import { ensureDir } from "./ensure-dir.ts";
 
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 const MAX_DIRECTORY_FILES = 500;
@@ -156,7 +156,7 @@ export class FileIndexer {
 
   constructor(opts: FileIndexerOptions = {}) {
     this.indexDir = opts.index_dir ?? "file_index/";
-    mkdirSync(this.indexDir, { recursive: true });
+    ensureDir(this.indexDir);
     this.maxFileBytes = opts.max_file_bytes ?? MAX_FILE_BYTES;
     this.maxDirectoryFiles = opts.max_directory_files ?? MAX_DIRECTORY_FILES;
     this.allowedRoots =

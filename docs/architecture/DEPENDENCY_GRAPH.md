@@ -31,7 +31,7 @@ The codebase is organized into the following modules:
 
 - **root**: 4 files
 - **entry**: 1 file
-- **remember**: 9 files
+- **remember**: 10 files
 
 ---
 
@@ -128,13 +128,13 @@ The codebase is organized into the following modules:
 **Node.js Built-in Dependencies:**
 | Module | Import |
 |--------|--------|
-| `fs` | `mkdirSync` |
 | `path` | `dirname` |
 | `crypto` | `randomUUID` |
 
 **Internal Dependencies:**
 | File | Imports | Type |
 |------|---------|------|
+| `./ensure-dir.ts` | `ensureDir` | Import |
 | `./embeddings.ts` | `blobToEmbedding, cosine, embed, embeddingToBlob` | Import |
 | `./sectors.ts` | `classifySectors` | Import |
 | `./types.ts` | `SectorType` | Import (type-only) |
@@ -155,7 +155,7 @@ The codebase is organized into the following modules:
 **Node.js Built-in Dependencies:**
 | Module | Import |
 |--------|--------|
-| `fs` | `mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, existsSync, unlinkSync, statSync` |
+| `fs` | `mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, existsSync, unlinkSync, statSync` |
 | `os` | `tmpdir` |
 | `path` | `dirname, join` |
 | `child_process` | `spawnSync` |
@@ -164,6 +164,7 @@ The codebase is organized into the following modules:
 | File | Imports | Type |
 |------|---------|------|
 | `./embeddings.ts` | `cosine, embed` | Import |
+| `./ensure-dir.ts` | `ensureDir` | Import |
 
 **Exports:**
 - Interfaces: `ArchiveChunk`, `ArchiveSidecar`, `EncodeResult`
@@ -178,13 +179,25 @@ The codebase is organized into the following modules:
 
 ---
 
+### `src/remember/ensure-dir.ts` - Folder creation that accepts a folder that already exists.
+
+**Node.js Built-in Dependencies:**
+| Module | Import |
+|--------|--------|
+| `fs` | `mkdirSync, statSync` |
+
+**Exports:**
+- Functions: `ensureDir`
+
+---
+
 ### `src/remember/file-indexer.ts` - File indexing via QR-encoded video storage.
 
 **Node.js Built-in Dependencies:**
 | Module | Import |
 |--------|--------|
 | `crypto` | `createHash` |
-| `fs` | `existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync` |
+| `fs` | `existsSync, readFileSync, renameSync, statSync, writeFileSync` |
 | `os` | `homedir` |
 | `path` | `basename, extname, isAbsolute, join, relative, resolve` |
 
@@ -192,6 +205,7 @@ The codebase is organized into the following modules:
 | File | Imports | Type |
 |------|---------|------|
 | `./archive.ts` | `encodeChunks, searchSidecar` | Import |
+| `./ensure-dir.ts` | `ensureDir` | Import |
 
 **Exports:**
 - Classes: `FileIndexer`
@@ -251,13 +265,14 @@ The codebase is organized into the following modules:
 | Module | Import |
 |--------|--------|
 | `crypto` | `createHash` |
-| `fs` | `existsSync, mkdirSync, readdirSync, statSync` |
+| `fs` | `existsSync, readdirSync, statSync` |
 | `path` | `basename, extname, join` |
 
 **Internal Dependencies:**
 | File | Imports | Type |
 |------|---------|------|
 | `./active-store.ts` | `ActiveStore` | Import |
+| `./ensure-dir.ts` | `ensureDir` | Import |
 | `./archive.ts` | `encodeChunks, searchSidecar, sidecarChunkCount` | Import |
 | `./types.ts` | `ArchiveIndex, ArchiveInfo, ArchiveStats, HybridMemoryResult, MemoryLocation, SystemStats` | Import |
 
@@ -285,13 +300,14 @@ The codebase is organized into the following modules:
 
 | File | Imports From | Exports To |
 |------|--------------|------------|
+| `src/remember/system` | 4 files | 3 files |
 | `src/remember/index` | 5 files | 1 file |
-| `src/remember/system` | 3 files | 3 files |
+| `src/remember/active-store` | 4 files | 1 file |
 | `src/tools` | 3 files | 2 files |
-| `src/remember/active-store` | 3 files | 1 file |
+| `src/remember/archive` | 2 files | 2 files |
+| `src/remember/ensure-dir` | 0 files | 4 files |
+| `src/remember/file-indexer` | 2 files | 2 files |
 | `src/remember/types` | 0 files | 4 files |
-| `src/remember/archive` | 1 file | 2 files |
-| `src/remember/file-indexer` | 1 file | 2 files |
 | `src/remember/scheduler` | 1 file | 2 files |
 | `src/server` | 2 files | 1 file |
 | `src/index` | 2 files | 0 files |
@@ -328,37 +344,42 @@ graph TD
         N5[active-store]
         N6[archive]
         N7[embeddings]
-        N8[file-indexer]
-        N9[index]
-        N10[scheduler]
-        N11[sectors]
-        N12[system]
-        N13[types]
+        N8[ensure-dir]
+        N9[file-indexer]
+        N10[index]
+        N11[scheduler]
+        N12[sectors]
+        N13[system]
+        N14[types]
     end
 
-    N0 --> N9
+    N0 --> N10
     N4 --> N1
     N4 --> N2
+    N5 --> N8
     N5 --> N7
-    N5 --> N11
-    N5 --> N13
+    N5 --> N12
+    N5 --> N14
     N6 --> N7
-    N8 --> N6
-    N9 --> N12
+    N6 --> N8
+    N9 --> N6
     N9 --> N8
-    N9 --> N10
-    N9 --> N13
-    N9 --> N3
-    N10 --> N12
+    N10 --> N13
+    N10 --> N9
+    N10 --> N11
+    N10 --> N14
+    N10 --> N3
     N11 --> N13
-    N12 --> N5
-    N12 --> N6
-    N12 --> N13
+    N12 --> N14
+    N13 --> N5
+    N13 --> N8
+    N13 --> N6
+    N13 --> N14
     N1 --> N2
     N1 --> N3
-    N2 --> N8
-    N2 --> N10
-    N2 --> N12
+    N2 --> N9
+    N2 --> N11
+    N2 --> N13
 ```
 
 ---
@@ -368,14 +389,14 @@ graph TD
 
 | Category | Count |
 |----------|-------|
-| Total Source Files | 23 |
+| Total Source Files | 26 |
 | Subsystems | 3 |
-| Total Lines of Code | 3431 |
-| Total Exports | 57 |
+| Total Lines of Code | 3668 |
+| Total Exports | 58 |
 | Total Re-exports | 9 |
 | Total Classes | 4 |
 | Total Interfaces | 11 |
-| Total Functions | 17 |
+| Total Functions | 18 |
 | Total Type Guards | 0 |
 | Total Enums | 1 |
 | Type-only Imports | 2 |

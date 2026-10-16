@@ -308,7 +308,7 @@ export interface RememberSystemOptions {
 
 Defaults for the library: `active_db` is `remember_active.db`, `archive_dir` is `archives/`, `archive_threshold_days` is 60, `archive_min_salience` is 0.2, and `auto_archive_enabled` is false. The MCP server uses different file names: `remember_mcp.db` and `mcp_archives/`.
 
-The constructor creates the archive folder, opens the database, and reads the archive folder to rebuild `archiveIndex`. The rebuild accepts only video files named `user_<key>_<digits>.mp4`.
+The constructor creates the archive folder, opens the database, and reads the archive folder to rebuild `archiveIndex`. A folder that exists is accepted, including `.` and `./`. A bare file name for `active_db` puts the database in the working directory. The rebuild accepts only video files named `user_<key>_<digits>.mp4`.
 
 `archiveKey` returns the user id, or `default` when the id is null, undefined or empty.
 
@@ -367,7 +367,7 @@ export interface FileIndexerOptions {
 }
 ```
 
-Defaults: `index_dir` is `file_index/` (the MCP server uses this value), `max_file_bytes` is 32 MiB, and `max_directory_files` is 500. A non-null `allowed_roots` replaces the roots from the environment.
+Defaults: `index_dir` is `file_index/` (the MCP server uses this value), `max_file_bytes` is 32 MiB, and `max_directory_files` is 500. A non-null `allowed_roots` replaces the roots from the environment. The constructor creates the index folder if it is missing. A folder that exists is accepted, including `.` and `./`.
 
 `FileMeta` is `Record<string, unknown>`, and the module does not export the alias.
 
@@ -452,5 +452,5 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalExports | 57 | repo-tools map (whole repository) |
-| totalSourceFiles | 23 | repo-tools map (whole repository) |
+| totalExports | 58 | repo-tools map (whole repository) |
+| totalSourceFiles | 26 | repo-tools map (whole repository) |

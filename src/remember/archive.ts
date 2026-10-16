@@ -6,12 +6,13 @@
  * start stays cheap. The MP4 remains the durable, portable payload.
  */
 
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, existsSync, unlinkSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, existsSync, unlinkSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import QRCode from "qrcode";
 import { cosine, embed } from "./embeddings.ts";
+import { ensureDir } from "./ensure-dir.ts";
 
 /**
  * One archived text chunk with its embedding.
@@ -62,7 +63,7 @@ function writeSidecar(indexPath: string, chunks: string[]): ArchiveSidecar {
       embedding: Array.from(embed(text)),
     })),
   };
-  mkdirSync(dirname(indexPath), { recursive: true });
+  ensureDir(dirname(indexPath));
   const tmp = `${indexPath}.tmp`;
   writeFileSync(tmp, JSON.stringify(sidecar), "utf8");
   renameSync(tmp, indexPath);
@@ -87,7 +88,7 @@ async function writeQrFrames(chunks: string[], frameDir: string): Promise<number
 }
 
 function runFfmpeg(frameDir: string, videoPath: string, frameCount: number): void {
-  mkdirSync(dirname(videoPath), { recursive: true });
+  ensureDir(dirname(videoPath));
   // Constant frame rate; even a single frame still produces a valid MP4.
   const args = [
     "-y",
