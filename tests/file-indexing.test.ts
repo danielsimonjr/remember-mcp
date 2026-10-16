@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/server";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FileIndexer } from "../src/remember/file-indexer.ts";
+import { sendJsonRpc, spawnServer } from "./mcp-stdio.ts";
 
 describe("file indexing", () => {
   const dirs: string[] = [];
@@ -232,6 +234,68 @@ describe("file indexing", () => {
       expect(errors[0]!.file).toContain("latin1.txt");
       expect(errors[0]!.error).toContain("Refusing to index non-UTF-8 file:");
       indexer.close();
+    }, 120_000);
+  });
+
+  describe("index_file over MCP", () => {
+    test("a Latin-1 file answers permission_denied, and a valid file is still indexed", async () => {
+      const cwd = tmp();
+      const docs = join(cwd, "docs");
+      mkdirSync(docs, { recursive: true });
+      const latin1 = join(docs, "latin1.txt");
+      writeFileSync(latin1, Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x20, 0x6f, 0x6b]));
+      const valid = join(docs, "valid.txt");
+      writeFileSync(valid, "a plain ASCII file about the retention policy\n");
+
+      // `spawnServer` copies the environment of this process, so the roots variable is set for the spawn only.
+      const previousRoots = process.env.REMEMBER_INDEX_ROOTS;
+      process.env.REMEMBER_INDEX_ROOTS = docs;
+      const server = spawnServer(cwd);
+      if (previousRoots === undefined) delete process.env.REMEMBER_INDEX_ROOTS;
+      else process.env.REMEMBER_INDEX_ROOTS = previousRoots;
+
+      try {
+        await sendJsonRpc(server, {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: LATEST_PROTOCOL_VERSION,
+            capabilities: {},
+            clientInfo: { name: "remember-mcp-test", version: "0.0.1" },
+          },
+        });
+        server.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
+        await server.stdin.flush();
+
+        let id = 1;
+        const call = async (name: string, args: Record<string, unknown>) => {
+          const response = await sendJsonRpc(server, {
+            jsonrpc: "2.0",
+            id: ++id,
+            method: "tools/call",
+            params: { name, arguments: args },
+          });
+          expect(response).not.toBeNull();
+          const result = response!.result as { isError?: boolean; content: { text: string }[] };
+          if (result.isError) throw new Error(result.content[0]!.text);
+          return JSON.parse(result.content[0]!.text) as unknown;
+        };
+
+        const refused = (await call("index_file", { file_path: latin1 })) as Record<string, unknown>;
+        expect(refused.error).toBe("permission_denied");
+        expect(String(refused.message)).toContain("Refusing to index non-UTF-8 file:");
+        expect(String(refused.message)).toContain("latin1.txt");
+
+        const accepted = (await call("index_file", { file_path: valid })) as Record<string, unknown>;
+        expect(accepted.status).toBe("indexed");
+
+        const listed = (await call("list_indexed_files", {})) as Array<Record<string, unknown>>;
+        expect(listed.map((f) => f.file_name)).toEqual(["valid.txt"]);
+      } finally {
+        server.proc.kill();
+        await server.proc.exited;
+      }
     }, 120_000);
   });
 });

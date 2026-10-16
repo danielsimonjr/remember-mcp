@@ -17,13 +17,13 @@ The first four rows come from `repo-tools map`. The scope of each row is the who
 | Metric | Value | Scope | Source |
 |---|---|---|---|
 | Source files | 27 | whole repository | `repo-tools map` |
-| Lines of code | 4019 | whole repository | `repo-tools map` |
+| Lines of code | 4083 | whole repository | `repo-tools map` |
 | Exports | 58 | whole repository | `repo-tools map` |
 | Entry roots | 3 | whole repository | `repo-tools map` |
 | Files in `src/` | 15 | `src/` only | `file-inventory.json`, area `src` |
 | Lines in `src/` | 2775 | `src/` only | `file-inventory.json`, area `src` |
 | Files in `tests/` | 12 | `tests/` only | `file-inventory.json`, area `tests` |
-| Lines in `tests/` | 1244 | `tests/` only | `file-inventory.json`, area `tests` |
+| Lines in `tests/` | 1308 | `tests/` only | `file-inventory.json`, area `tests` |
 | MCP tools | 13 | `src/tools.ts` | direct count of the `TOOLS` array |
 
 The three entry roots are `src/index.ts` (the `bin` entry), `src/server.ts` (the `./server` export) and `src/remember/index.ts` (the `.` export).
@@ -49,7 +49,7 @@ remember-mcp/
 │       ├── file-indexer.ts     FileIndexer: file chunking, indexing and search
 │       ├── ensure-dir.ts       ensureDir: creates a folder only when it is missing
 │       └── types.ts            shared types and the sector list
-├── tests/                      12 files, 1244 lines (11 test files and one stdio helper)
+├── tests/                      12 files, 1308 lines (11 test files and one stdio helper)
 ├── docs/architecture/          this documentation set
 ├── README.md
 ├── CHANGELOG.md
@@ -108,7 +108,7 @@ The claims come from `repo-tools map .`, which reads the whole repository. The o
 | Claim | Value | Source |
 |---|---|---|
 | totalSourceFiles | 27 | repo-tools map (whole repository) |
-| totalLinesOfCode | 4019 | repo-tools map (whole repository) |
+| totalLinesOfCode | 4083 | repo-tools map (whole repository) |
 | totalExports | 58 | repo-tools map (whole repository) |
 | entryRoots | 3 | repo-tools map (whole repository) |
 | orphanedFiles | 1 | repo-tools map (whole repository) |

@@ -25,9 +25,12 @@ All notable changes to this project will be documented in this file.
   run. The indexer now decodes with a fatal `TextDecoder`. The tool answers
   `{ error: "permission_denied", message: "Refusing to index non-UTF-8 file: <path>" }`
   and records nothing for the file. A file with a leading byte order mark decodes as
-  before, and the mark stays in the text. Five new tests in `tests/file-indexing.test.ts`:
-  three fail on the old code, and two pass on both. Each of two mutations of the decoder
-  options (no `fatal`, and `ignoreBOM: false`) fails at least one test.
+  before, and the mark stays in the text. A file that the indexer stored before this change
+  keeps its stored text: `index_file` answers `already_indexed` for it, because the check of
+  the content hash runs before the decode. Six new tests in `tests/file-indexing.test.ts`:
+  four fail on the old code (one of them calls `index_file` over MCP), and two pass on
+  both. Each of two mutations of the decoder options (no `fatal`, and `ignoreBOM: false`)
+  fails at least one test.
 
 - **`search_files` now sets `line_info` for a code chunk, and no longer sets it for a text
   chunk that starts with a link reference.** `FileIndexer.search` set `line_info` when the
