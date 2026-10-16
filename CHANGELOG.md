@@ -26,8 +26,8 @@ All notable changes to this project will be documented in this file.
   The search now sets `line_info` only for a file whose metadata has `chunks_meta` (the
   indexer split the file by lines), and only when the chunk starts with a header of that
   form. The value is the header without its line break. Three new tests in
-  `tests/file-indexing.test.ts`: two fail on the old code, and removing the `chunks_meta`
-  test makes the third fail.
+  `tests/file-indexing.test.ts`: two fail on the old code. The third passes on the old code,
+  and fails when the `chunks_meta` condition is removed from the new code.
 
 - **Two archive passes in the same second no longer share one archive name.** An archive
   name is `user_<key>_<unix seconds>`. Two passes for one key in one second wrote the same
