@@ -7,6 +7,10 @@ import { FileIndexer } from "./remember/file-indexer.ts";
 import { ArchivalScheduler } from "./remember/scheduler.ts";
 import { RememberSystem } from "./remember/system.ts";
 
+/**
+ * A tool handler. The tool handler takes the raw arguments of a `tools/call` request.
+ * The tool handler returns a value. The server serializes the value as JSON.
+ */
 export type ToolHandler = (raw: Record<string, unknown>) => Promise<unknown>;
 
 let rememberSystem: RememberSystem | null = null;
@@ -254,6 +258,10 @@ export const TOOLS: Tool[] = [
 ];
 
 export const HANDLERS: Record<string, ToolHandler> = {
+  /**
+   * Add a memory to active storage. Returns the stored memory.
+   * Returns an `invalid_argument` error object when the content is empty or too long.
+   */
   async add_memory(raw) {
     const system = await agetSystem();
     try {
@@ -271,6 +279,12 @@ export const HANDLERS: Record<string, ToolHandler> = {
     }
   },
 
+  /**
+   * Search active memory. Search the archives too, unless `include_archive` is false.
+   * Return up to `k` results ordered by score.
+   * A bad argument returns a list of one `invalid_argument` error object.
+   * A bad argument is an empty query, or a `k` that is not an integer from 1 to 100.
+   */
   async query_memory(raw) {
     const system = await agetSystem();
     try {
@@ -297,6 +311,11 @@ export const HANDLERS: Record<string, ToolHandler> = {
     }
   },
 
+  /**
+   * Move old, low-salience memories into a new archive video.
+   * Returns the counts and the sizes, and deletes the archived memories from active storage.
+   * When the video encoder fails, the tool archives nothing and returns zero counts.
+   */
   async archive_memories(raw) {
     const system = await agetSystem();
     try {
@@ -316,6 +335,11 @@ export const HANDLERS: Record<string, ToolHandler> = {
     }
   },
 
+  /**
+   * Add the content that the caller gives to active storage, and record the source archive in the `recalled_from` metadata.
+   * The tool does not read the archive. It checks that the archive exists.
+   * Returns a `not_found` error object when the archive is unknown or its file is missing.
+   */
   async recall_memory(raw) {
     const system = await agetSystem();
     try {
@@ -332,6 +356,9 @@ export const HANDLERS: Record<string, ToolHandler> = {
     }
   },
 
+  /**
+   * Return the counts, the sizes and the average salience of active storage and the archives.
+   */
   async get_stats(raw) {
     const system = await agetSystem();
     const stats = await system.getStats(asOptionalString(raw.user_id));
@@ -348,12 +375,20 @@ export const HANDLERS: Record<string, ToolHandler> = {
     };
   },
 
+  /**
+   * Return the state of the archival scheduler.
+   */
   async scheduler_status() {
     await agetSystem();
     if (!scheduler) return { error: "Scheduler not initialized" };
     return scheduler.getStatus();
   },
 
+  /**
+   * Start or stop the archival scheduler, or run one archival pass at once.
+   * `action` is `start`, `stop` or `run_now`.
+   * `run_now` does nothing while `enabled` is false, and the tool still reports that it triggered a pass.
+   */
   async scheduler_control(raw) {
     await agetSystem();
     if (!scheduler) return { error: "Scheduler not initialized" };
@@ -376,6 +411,12 @@ export const HANDLERS: Record<string, ToolHandler> = {
     };
   },
 
+  /**
+   * Index one file. Returns `already_indexed` when the content hash is known.
+   * The function returns a `permission_denied` object for a path outside allowed roots.
+   * The function returns `permission_denied` for a dotfile or a binary file.
+   * The function returns `permission_denied` for a file over the size limit.
+   */
   async index_file(raw) {
     const indexer = await agetFileIndexer();
     try {
@@ -397,6 +438,11 @@ export const HANDLERS: Record<string, ToolHandler> = {
     }
   },
 
+  /**
+   * Index the files of a directory that match a glob pattern.
+   * Returns the counts, the indexed files and the errors. A file that fails does not stop the run.
+   * The run stops at the directory file cap and records that stop as an error.
+   */
   async index_directory(raw) {
     const indexer = await agetFileIndexer();
     try {
@@ -419,6 +465,10 @@ export const HANDLERS: Record<string, ToolHandler> = {
     }
   },
 
+  /**
+   * Search the indexed files. Returns the best chunks of all files, ordered by score.
+   * `file_filter` keeps the files whose path contains the text. `file_type_filter` keeps one file type.
+   */
   async search_files(raw) {
     const indexer = await agetFileIndexer();
     try {
@@ -433,16 +483,26 @@ export const HANDLERS: Record<string, ToolHandler> = {
     }
   },
 
+  /**
+   * List the indexed files with their type, size and chunk count.
+   */
   async list_indexed_files() {
     const indexer = await agetFileIndexer();
     return indexer.listIndexedFiles();
   },
 
+  /**
+   * Return the metadata of one indexed file, or null when the file is not indexed.
+   */
   async get_file_info(raw) {
     const indexer = await agetFileIndexer();
     return indexer.getFileInfo(String(raw.file_path ?? ""));
   },
 
+  /**
+   * Return the number of files and chunks. Return the source and video sizes.
+   * Return the compression ratio. Return the count for each file type.
+   */
   async get_file_stats() {
     const indexer = await agetFileIndexer();
     return indexer.getStats();
@@ -455,6 +515,10 @@ export async function setup(): Promise<void> {
   await agetFileIndexer();
 }
 
+/**
+ * Close the memory system and the file indexer, and drop the three singletons.
+ * The stdio entry calls this function when the process receives SIGINT or SIGTERM.
+ */
 export function shutdown(): void {
   try {
     rememberSystem?.close();

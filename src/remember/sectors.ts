@@ -70,6 +70,11 @@ const KEYWORDS: Record<SectorType, string[]> = {
   ],
 };
 
+/**
+ * Classify text into cognitive sectors by keyword match.
+ * The sector with the most keyword hits is primary. Up to two more sectors with at least one hit follow it.
+ * When no keyword matches, the primary sector is `semantic`.
+ */
 export function classifySectors(content: string): {
   primary: SectorType;
   sectors: SectorType[];

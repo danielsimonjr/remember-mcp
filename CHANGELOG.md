@@ -22,6 +22,19 @@ All notable changes to this project will be documented in this file.
   still said `>=1.1.0` while CI already installed 1.4.2, so the declared floor and the
   tested floor had drifted more than three minor versions apart. Both now say 1.4.2.
 
+- **Architecture documents rewritten for the TypeScript implementation.** All ten files in
+  `docs/architecture/` still described the removed Python stack, and `repo-tools check`
+  failed on every one. `OVERVIEW.md`, `ARCHITECTURE.md`, `COMPONENTS.md`, `DATAFLOW.md` and
+  `API.md` are written again from the source, and each ends with a Verification table that the
+  check reads. `FILE_INVENTORY.md`, `TEST_COVERAGE.md`, `DEPENDENCY_GRAPH.md`,
+  `unused-analysis.md` and `duplicate-symbols.md` are now the output of
+  `repo-tools map . --out=docs/architecture`. The README links all ten and states the real
+  Bun floor (1.4.2).
+
+- **Doc comments on the 37 exported symbols that had none.** `repo-tools docs check src`
+  now passes with 45 of 45 documented and no MUST issue. The change adds comments only.
+  Runtime behavior is the same.
+
 ## [2.0.0] - 2026-09-05
 
 ### Changed — TypeScript on Bun

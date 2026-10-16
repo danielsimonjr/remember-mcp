@@ -1,73 +1,389 @@
-# Dependency Graph
+<!-- repo-map:no-verification -->
+<!-- GENERATED FILE -- do not edit by hand.
+     Regenerate with `repo-tools map`. -->
 
-Derived from `repo_map.py map`'s `dependency-graph.json`. First-party edges only —
-`external`/stdlib are listed separately per module.
+# remember-mcp - Dependency Graph
 
-## Shape
+**Version**: 2.0.0
 
+This document provides a comprehensive dependency graph of all files, components, imports, functions, and variables in the codebase.
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Package Dependencies](#package-dependencies)
+3. [Root Dependencies](#root-dependencies)
+4. [Entry Dependencies](#entry-dependencies)
+5. [Remember Dependencies](#remember-dependencies)
+6. [Dependency Matrix](#dependency-matrix)
+7. [Circular Dependency Analysis](#circular-dependency-analysis)
+8. [Visual Dependency Graph](#visual-dependency-graph)
+9. [Summary Statistics](#summary-statistics)
+
+---
+
+<a id="overview"></a>
+## Overview
+
+The codebase is organized into the following modules:
+
+- **root**: 4 files
+- **entry**: 1 file
+- **remember**: 9 files
+
+---
+
+<a id="root-dependencies"></a>
+
+## Root Dependencies
+
+### `src/example.ts` - Example usage of remember-mcp hybrid memory system (Bun).
+
+**Internal Dependencies:**
+| File | Imports | Type |
+|------|---------|------|
+| `./remember/index.ts` | `RememberSystem` | Import |
+
+---
+
+### `src/server.ts` - server module
+
+**External Dependencies:**
+| Package | Import |
+|---------|--------|
+| `@modelcontextprotocol/server` | `McpServer, fromJsonSchema, JsonSchemaType` |
+
+**Internal Dependencies:**
+| File | Imports | Type |
+|------|---------|------|
+| `./tools.ts` | `HANDLERS, TOOLS` | Import |
+| `./version.ts` | `PKG_VERSION` | Import |
+
+**Exports:**
+- Functions: `buildServer`
+
+---
+
+### `src/tools.ts` - MCP tool definitions and handlers for remember-mcp.
+
+**External Dependencies:**
+| Package | Import |
+|---------|--------|
+| `@modelcontextprotocol/server` | `Tool` |
+
+**Internal Dependencies:**
+| File | Imports | Type |
+|------|---------|------|
+| `./remember/file-indexer.ts` | `FileIndexer` | Import |
+| `./remember/scheduler.ts` | `ArchivalScheduler` | Import |
+| `./remember/system.ts` | `RememberSystem` | Import |
+
+**Exports:**
+- Types: `ToolHandler`
+- Functions: `setup`, `shutdown`, `listRegisteredToolNames`
+- Constants: `TOOLS`, `HANDLERS`
+
+---
+
+### `src/version.ts` - version module
+
+**Exports:**
+- Constants: `PKG_VERSION`, `PKG_NAME`
+
+---
+
+<a id="entry-dependencies"></a>
+
+## Entry Dependencies
+
+### `src/index.ts` - Main MCP server entry for remember-mcp (Bun + TypeScript).
+
+**External Dependencies:**
+| Package | Import |
+|---------|--------|
+| `@modelcontextprotocol/server` | `LATEST_PROTOCOL_VERSION` |
+| `@modelcontextprotocol/server/stdio` | `serveStdio` |
+
+**Internal Dependencies:**
+| File | Imports | Type |
+|------|---------|------|
+| `./server.ts` | `buildServer` | Import |
+| `./tools.ts` | `shutdown` | Import |
+
+---
+
+<a id="remember-dependencies"></a>
+
+## Remember Dependencies
+
+### `src/remember/active-store.ts` - Active memory store backed by bun:sqlite.
+
+**External Dependencies:**
+| Package | Import |
+|---------|--------|
+| `bun:sqlite` | `Database` |
+
+**Node.js Built-in Dependencies:**
+| Module | Import |
+|--------|--------|
+| `fs` | `mkdirSync` |
+| `path` | `dirname` |
+| `crypto` | `randomUUID` |
+
+**Internal Dependencies:**
+| File | Imports | Type |
+|------|---------|------|
+| `./embeddings.ts` | `blobToEmbedding, cosine, embed, embeddingToBlob` | Import |
+| `./sectors.ts` | `classifySectors` | Import |
+| `./types.ts` | `SectorType` | Import (type-only) |
+
+**Exports:**
+- Classes: `ActiveStore`
+- Interfaces: `ActiveMemoryRow`, `AddMemoryResult`
+
+---
+
+### `src/remember/archive.ts` - QR-video archive helpers (TypeScript memvid stand-in).
+
+**External Dependencies:**
+| Package | Import |
+|---------|--------|
+| `qrcode` | `default` |
+
+**Node.js Built-in Dependencies:**
+| Module | Import |
+|--------|--------|
+| `fs` | `mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, existsSync, unlinkSync, statSync` |
+| `os` | `tmpdir` |
+| `path` | `dirname, join` |
+| `child_process` | `spawnSync` |
+
+**Internal Dependencies:**
+| File | Imports | Type |
+|------|---------|------|
+| `./embeddings.ts` | `cosine, embed` | Import |
+
+**Exports:**
+- Interfaces: `ArchiveChunk`, `ArchiveSidecar`, `EncodeResult`
+- Functions: `removeArchiveOutputs`, `encodeChunks`, `loadSidecar`, `sidecarChunkCount`, `searchSidecar`
+
+---
+
+### `src/remember/embeddings.ts` - Lightweight, dependency-free embedding provider.
+
+**Exports:**
+- Functions: `embed`, `cosine`, `embeddingToBlob`, `blobToEmbedding`
+
+---
+
+### `src/remember/file-indexer.ts` - File indexing via QR-encoded video storage.
+
+**Node.js Built-in Dependencies:**
+| Module | Import |
+|--------|--------|
+| `crypto` | `createHash` |
+| `fs` | `existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync` |
+| `os` | `homedir` |
+| `path` | `basename, extname, isAbsolute, join, relative, resolve` |
+
+**Internal Dependencies:**
+| File | Imports | Type |
+|------|---------|------|
+| `./archive.ts` | `encodeChunks, searchSidecar` | Import |
+
+**Exports:**
+- Classes: `FileIndexer`
+- Interfaces: `FileIndexerOptions`
+
+---
+
+### `src/remember/index.ts` - Package entry point for remember (re-exports 9 symbols)
+
+**Internal Dependencies:**
+| File | Imports | Type |
+|------|---------|------|
+| `./system.ts` | `RememberSystem` | Re-export |
+| `./file-indexer.ts` | `FileIndexer` | Re-export |
+| `./scheduler.ts` | `ArchivalScheduler` | Re-export |
+| `./types.ts` | `MemoryLocation, HybridMemoryResult, ArchiveStats, SystemStats, SectorType` | Re-export |
+| `../version.ts` | `PKG_VERSION` | Re-export |
+
+**Exports:**
+- Re-exports:
+
+  ```text
+  RememberSystem, FileIndexer, ArchivalScheduler, MemoryLocation, HybridMemoryResult, ArchiveStats,
+  SystemStats, SectorType, VERSION
+  ```
+
+
+---
+
+### `src/remember/scheduler.ts` - Background scheduler for automatic memory archival.
+
+**Internal Dependencies:**
+| File | Imports | Type |
+|------|---------|------|
+| `./system.ts` | `RememberSystem` | Import (type-only) |
+
+**Exports:**
+- Classes: `ArchivalScheduler`
+
+---
+
+### `src/remember/sectors.ts` - Keyword-heuristic sector classifier.
+
+**Internal Dependencies:**
+| File | Imports | Type |
+|------|---------|------|
+| `./types.ts` | `SECTORS, SectorType` | Import |
+
+**Exports:**
+- Functions: `classifySectors`
+
+---
+
+### `src/remember/system.ts` - RememberSystem — hybrid active (SQLite) + archive (QR video) manager.
+
+**Node.js Built-in Dependencies:**
+| Module | Import |
+|--------|--------|
+| `crypto` | `createHash` |
+| `fs` | `existsSync, mkdirSync, readdirSync, statSync` |
+| `path` | `basename, extname, join` |
+
+**Internal Dependencies:**
+| File | Imports | Type |
+|------|---------|------|
+| `./active-store.ts` | `ActiveStore` | Import |
+| `./archive.ts` | `encodeChunks, searchSidecar, sidecarChunkCount` | Import |
+| `./types.ts` | `ArchiveIndex, ArchiveInfo, ArchiveStats, HybridMemoryResult, MemoryLocation, SystemStats` | Import |
+
+**Exports:**
+- Classes: `RememberSystem`
+- Interfaces: `RememberSystemOptions`
+- Constants: `MAX_CONTENT_CHARS`, `MAX_QUERY_K`
+
+---
+
+### `src/remember/types.ts` - Overall system statistics.
+
+**Exports:**
+- Interfaces: `HybridMemoryResult`, `ArchiveStats`, `SystemStats`, `ArchiveInfo`
+- Types: `SectorType`, `ArchiveIndex`
+- Enums: `MemoryLocation`
+- Constants: `SECTORS`
+
+---
+
+<a id="dependency-matrix"></a>
+## Dependency Matrix
+
+### File Import/Export Matrix
+
+| File | Imports From | Exports To |
+|------|--------------|------------|
+| `src/remember/index` | 5 files | 1 file |
+| `src/remember/system` | 3 files | 3 files |
+| `src/tools` | 3 files | 2 files |
+| `src/remember/active-store` | 3 files | 1 file |
+| `src/remember/types` | 0 files | 4 files |
+| `src/remember/archive` | 1 file | 2 files |
+| `src/remember/file-indexer` | 1 file | 2 files |
+| `src/remember/scheduler` | 1 file | 2 files |
+| `src/server` | 2 files | 1 file |
+| `src/index` | 2 files | 0 files |
+| `src/remember/embeddings` | 0 files | 2 files |
+| `src/remember/sectors` | 1 file | 1 file |
+| `src/version` | 0 files | 2 files |
+| `src/example` | 1 file | 0 files |
+
+---
+
+<a id="circular-dependency-analysis"></a>
+## Circular Dependency Analysis
+
+**No circular dependencies detected.**
+---
+
+<a id="visual-dependency-graph"></a>
+## Visual Dependency Graph
+
+```mermaid
+graph TD
+    subgraph Root
+        N0[example]
+        N1[server]
+        N2[tools]
+        N3[version]
+    end
+
+    subgraph Entry
+        N4[index]
+    end
+
+    subgraph Remember
+        N5[active-store]
+        N6[archive]
+        N7[embeddings]
+        N8[file-indexer]
+        N9[index]
+        N10[scheduler]
+        N11[sectors]
+        N12[system]
+        N13[types]
+    end
+
+    N0 --> N9
+    N4 --> N1
+    N4 --> N2
+    N5 --> N7
+    N5 --> N11
+    N5 --> N13
+    N6 --> N7
+    N8 --> N6
+    N9 --> N12
+    N9 --> N8
+    N9 --> N10
+    N9 --> N13
+    N9 --> N3
+    N10 --> N12
+    N11 --> N13
+    N12 --> N5
+    N12 --> N6
+    N12 --> N13
+    N1 --> N2
+    N1 --> N3
+    N2 --> N8
+    N2 --> N10
+    N2 --> N12
 ```
-server.py  (entry root)
-   ├─► remember/system.py ──► remember/types.py        (leaf)
-   │                     └──► remember/video.py        (leaf)
-   ├─► remember/scheduler.py                           (leaf)
-   └─► remember/file_indexer.py ──► remember/video.py  (leaf)
 
-remember/__init__.py ──► remember/system.py            (re-export)
-example.py ──► remember/__init__.py                    (orphan: nothing imports example.py)
-```
+---
 
-**0 runtime circular dependencies.** The graph is a shallow tree: one root, one two-level
-chain (`server → system → types`), and three leaves.
+<a id="summary-statistics"></a>
+## Summary Statistics
 
-## Per module
+| Category | Count |
+|----------|-------|
+| Total Source Files | 22 |
+| Subsystems | 3 |
+| Total Lines of Code | 3264 |
+| Total Exports | 57 |
+| Total Re-exports | 9 |
+| Total Classes | 4 |
+| Total Interfaces | 11 |
+| Total Functions | 17 |
+| Total Type Guards | 0 |
+| Total Enums | 1 |
+| Type-only Imports | 2 |
+| Runtime Cyclic Components | 0 |
+| Type-only Cyclic Components | 0 |
+| Files in Runtime Cycles | 0 |
+| Files in Type-only Cycles | 0 |
 
-| Module | First-party imports | External |
-|---|---|---|
-| `server.py` | `remember/system.py`, `remember/scheduler.py`, `remember/file_indexer.py` | `fastmcp` |
-| `remember/system.py` | `remember/types.py`, `remember/video.py` | `openmemory`, `openmemory.embeddings`, `memvid` (via video) |
-| `remember/file_indexer.py` | `remember/video.py` | `memvid` (via video) |
-| `remember/video.py` | — | `memvid` (lazy) |
-| `remember/scheduler.py` | — | — |
-| `remember/types.py` | — | — |
-| `remember/__init__.py` | `remember/system.py` | — |
-| `example.py` | `remember/__init__.py` | — |
+---
 
-### Tests
-
-| Module | First-party imports |
-|---|---|
-| `tests/test_archival.py` | `remember/system.py` |
-| `tests/test_recall.py` | `remember/system.py` |
-| `tests/test_tool_contract.py` | `server.py` |
-| `tests/test_complete.py` | `remember/__init__.py`, `remember/scheduler.py` |
-| `tests/test_file_indexing.py` | `remember/file_indexer.py` |
-| `tests/list_tools.py` | `server.py` |
-| `tests/test_handshake_timing.py` | — (spawns the server as a subprocess) |
-
-`test_handshake_timing.py` importing nothing first-party is the point: it exercises the
-real process boundary rather than the module graph.
-
-## Reading notes
-
-- **`server.py` imports each of its three dependencies twice.** Once lazily inside
-  `get_system()`/`get_file_indexer()` and once under `TYPE_CHECKING` for annotations. The
-  graph records import *statements*, so the edge appears twice. That duplication is
-  deliberate in the source — it is what keeps the heavy imports out of module scope while
-  preserving type hints.
-- **`remember/scheduler.py` has no first-party imports** because it is handed a
-  `RememberSystem` rather than importing one. That is what makes it independently testable.
-- **`remember/file_indexer.py` imports `remember/video.py`** so it is no longer a
-  graph leaf; `video.py` is. The shared module exists so the two memvid call
-  sites cannot drift on constructor names or stdout isolation.
-
-## Verification
-
-Generated 2026-08-14 by `repo_map.py map`.
-Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_map.py check <repo> --docs docs/architecture`
-
-| Claim | Value | Source |
-|---|---|---|
-| runtimeCircularDeps | 0 | dependency-graph.json |
-| typeOnlyCircularDeps | 0 | dependency-graph.json |
-| totalTypeScriptFiles | 18 | dependency-graph.json |
-| entryRoots | 1 | dependency-graph.json |
+*Version*: 2.0.0

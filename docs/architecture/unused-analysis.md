@@ -1,60 +1,71 @@
-# Unused Analysis
+<!-- repo-map:no-verification -->
+<!-- GENERATED FILE -- do not edit by hand.
+     Regenerate with `repo-tools map`. -->
 
-Derived from `repo_map.py map`'s `unused-analysis.json`.
+# Unused Files and Exports Analysis
 
-## Files with no importer: 1
+## Summary
 
-| File | Verdict |
-|---|---|
-| `example.py` | **Expected.** A standalone demo, run directly, never imported. |
+- **Files with no in-repo importer**: 1
+- **Dormant files**: 1
+  - **Orphaned (reachable from nothing)**: 1
+  - **Test-only (only a test reaches them)**: 0
+- **Potentially unused exports**: 15
+  - **Unreferenced anywhere**: 2
+  - **Referenced in their own module**: 13
+  - **Not classified**: 0
 
-`example.py` imports `remember/__init__.py`, so it is a consumer, not dead weight. A file
-with zero in-repo importers is normal for a script invoked directly — this list is a
-question, not a deletion queue.
+## Caveats
 
-**Verified with a second method** rather than taken from the tool alone:
-`git grep -n "example" -- '*.py'` returns no import of it from any module.
+- A literal relative `import(...)` is a graph edge. A runtime call is a namespace use (`*`), so the exports of that file count as used. A type-position `import(...).Name` counts only `Name`, and `typeof import(...)` counts none. A dynamic import built from a variable or a template, and other runtime loads (e.g. `new Worker(path)`), are still invisible -- a file or export reached ONLY through one of those is reported as no-importer/unreferenced even though it may be live.
+- `noImporterFiles` is NOT a deletion-candidate list. A file with zero in-repo importers is expected, not suspicious, for: a standalone script invoked directly (e.g. a smoketest run via `node script.mjs`, never `import`ed by anything), or a build/lint config file loaded by its own tool rather than by source code (e.g. `eslint.config.mjs`, read by eslint itself). Cross-check against package.json scripts / tool configs before treating any entry here as dead.
+- Only NAMED exports are analysed (`FileNode.exports` carries named exports only) -- `export default` usage is not checked here.
+- The `referencedInModule` vs `unreferencedAnywhere` split for exports is a TEXT-LEVEL heuristic (whole-identifier occurrence count within the defining file's own source, minus the declaration site itself), not an AST reference count -- it can over-count a name that also appears in a string literal or comment. When the source text can't be read at all (no `RepoGraph.root_path`, or the file is missing) the export lands in `unclassifiedExports` instead of being guessed into either bucket.
+- `unreferencedAnywhereNotes`'s dynamic-import check (`_dynamic_import_referrers`) only sees `import(...)` calls with a LITERAL string specifier. A dynamic import built from a variable or template literal (e.g. `import(`./cmds/${name}.js`)`, a command-dispatcher pattern) is invisible to it -- 'found none' in a note means no LITERAL match was found, NOT that nothing imports the file.
 
-## Unused exports: 5
+## Dormant files: orphaned
 
-`repo_map` reports 5 exports referenced only inside their defining module. All five are
-accounted for:
+Source files that no root and no test reaches. Verify each one before you delete it.
 
-| Export | Module | Why it is not dead |
-|---|---|---|
-| `logger` | `remember/system.py` | Module logger, used throughout its own file |
-| `logger` | `remember/file_indexer.py` | Same |
-| `UNIFORM_EMBEDDING_MODEL` | `remember/system.py` | Consumed by `_uniform_embedding_provider()` in-module; exported so the pinning decision is inspectable and documentable |
-| `setup` | `server.py` | Called by `fastmcp` as a lifecycle hook, not by an import |
-| `main` | `example.py` | Script entry point under `__main__` |
+- `src/example.ts`
 
-**None is a deletion candidate.** Two are loggers, one is a documented constant, and two
-are entry points reached by a runtime rather than by an import statement — the exact
-caveat `unused-analysis.json` itself carries:
+## Dormant files: test-only
 
-> *"`noImporterFiles` is NOT a deletion-candidate list. A file with zero in-repo importers
-> is expected … for a standalone script invoked directly."*
+Source files that only a test reaches. They ship nothing, but a test uses them.
 
-## What this analysis cannot see
+_None._
 
-Static import parsing only. Anything reached dynamically is invisible:
+## Files with no in-repo importer
 
-- `fastmcp` discovers tools through the `@app.tool()` **decorator**, not through imports.
-  Every one of the 13 tool functions therefore looks unreferenced to a pure import graph.
-  `tests/test_tool_contract.py` exists precisely because this blind spot means the graph
-  cannot tell you a tool is still registered.
-- `openmemory` and `memvid` load models and indexes by path at runtime.
+No file of this repository imports these files. This is not a deletion list.
 
-So: a name absent from this report is not proven live, and a name present is not proven
-dead. Both directions need a second method.
+- `src/example.ts`
 
-## Verification
+## Exports unreferenced anywhere
 
-Generated 2026-08-14 by `repo_map.py map`.
-Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_map.py check <repo> --docs docs/architecture`
+No other file imports these names, and their own module does not use them.
 
-| Claim | Value | Source |
-|---|---|---|
-| noImporterFileCount | 1 | unused-analysis.json |
-| unusedExportsCount | 5 | dependency-graph.json |
-| orphanedFiles | 1 | dependency-graph.json |
+- `src/tools.ts`: `setup`
+- `src/version.ts`: `PKG_NAME`
+
+### Notes
+
+- `src/tools.ts` `setup`: Checked for a dynamic import() call with a LITERAL string specifier resolving to 'src/tools.ts' across the whole repo and found none. This scan can only see import() calls with a literal string specifier -- a dynamic import built from a variable or template literal (e.g. import(`./cmds/${name}.js`)) is invisible to it, so 'found none' means no LITERAL match was found, NOT that nothing imports this. 'setup' may still be consumed via such a call. Also verify against consumption this scan cannot see at all (docs examples, published API surface, a runtime-built path/`new Worker(...)`) before deleting.
+- `src/version.ts` `PKG_NAME`: Checked for a dynamic import() call with a LITERAL string specifier resolving to 'src/version.ts' across the whole repo and found none. This scan can only see import() calls with a literal string specifier -- a dynamic import built from a variable or template literal (e.g. import(`./cmds/${name}.js`)) is invisible to it, so 'found none' means no LITERAL match was found, NOT that nothing imports this. 'PKG_NAME' may still be consumed via such a call. Also verify against consumption this scan cannot see at all (docs examples, published API surface, a runtime-built path/`new Worker(...)`) before deleting.
+
+## Exports referenced in their own module
+
+No other file imports these names, but their own module uses them.
+
+- `src/remember/active-store.ts`: `ActiveMemoryRow`, `AddMemoryResult`
+- `src/remember/archive.ts`: `ArchiveChunk`, `ArchiveSidecar`, `EncodeResult`, `loadSidecar`, `removeArchiveOutputs`
+- `src/remember/embeddings.ts`: `EMBED_DIM`
+- `src/remember/file-indexer.ts`: `FileIndexerOptions`
+- `src/remember/system.ts`: `MAX_CONTENT_CHARS`, `MAX_QUERY_K`, `RememberSystemOptions`
+- `src/tools.ts`: `ToolHandler`
+
+## Exports not classified
+
+The analysis could not read the source of these names.
+
+_None._
