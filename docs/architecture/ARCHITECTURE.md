@@ -199,7 +199,7 @@ The archive index in memory has two levels. The first level is the user key. The
 
 All paths are relative to the working directory of the server process. The MCP client sets that directory.
 
-- **Folder creation.** Each module that writes to a folder calls `ensureDir`. The function skips `mkdirSync` for a folder that exists. A bare file name like `remember_mcp.db` has `.` as its folder. Some Bun releases on Windows throw an error. The error happens when `mkdirSync` receives `.`, `..`, or `./`.
+- **Folder creation.** Each module that writes to a folder calls `ensureDir`. The function skips `mkdirSync` for a folder that exists. A bare file name like `remember_mcp.db` has `.` as its folder. Bun on Windows can throw an error when `mkdirSync` receives `.`. Some Bun releases also throw an error for `..` and for `./`.
 
 ## Build and packaging
 
@@ -258,7 +258,7 @@ The tests run with `bun test`. The type check runs with `bun run typecheck`. Bot
 Gaps that a reader must know:
 
 - One test calls a tool: `bare-paths.test.ts` calls `get_stats`. The protocol tests stop at `initialize` and `tools/list`. The other 12 tool handlers, the argument coercion, the error mapping and the server wrapper have no behavior test.
-- The path cases of `bare-paths.test.ts` also pass on a runtime that accepts `mkdirSync` with `.`. They show the defect only on a runtime that throws. The other suites use absolute paths under a temporary folder.
+- The path cases of `bare-paths.test.ts` show the defect only on a runtime that throws for `.`. The runtime of the Windows CI job throws, so that job fails without `ensureDir`. The runtime of the Ubuntu CI job does not throw, so that job passes with or without `ensureDir`. The other suites use absolute paths under a temporary folder.
 - No test imports `ArchivalScheduler`, `classifySectors`, `embed` or `chunkCodeWithLines`. The engine tests reach the classifier and `embed` through `RememberSystem`. No test reaches the scheduler. The only file-indexing test indexes a `.txt` file, so no test reaches the line-aware chunker.
 
 The generated report [TEST_COVERAGE.md](TEST_COVERAGE.md) lists the source files that no test imports directly.
