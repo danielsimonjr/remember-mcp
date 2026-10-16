@@ -17,9 +17,9 @@ export type ServerProc = {
   stdout: ReadableStream<Uint8Array>;
 };
 
-export function spawnServer(): ServerProc {
+export function spawnServer(cwd: string = REPO): ServerProc {
   const proc = Bun.spawn(["bun", "run", SERVER], {
-    cwd: REPO,
+    cwd,
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",

@@ -8,11 +8,11 @@
 
 | Metric | Count |
 |--------|-------|
-| Total Source Files | 14 |
-| Total Test Files | 8 |
-| Source Files with Tests | 8 |
+| Total Source Files | 15 |
+| Total Test Files | 10 |
+| Source Files with Tests | 9 |
 | Source Files without Tests | 6 |
-| Coverage (raw, direct-import) | **57.1%** |
+| Coverage (raw, direct-import) | **60.0%** |
 ---
 
 ## Source Files Without Test Coverage
@@ -38,6 +38,7 @@ The following 6 source files are not directly imported by any test file:
 | Source File | Test Files |
 |-------------|------------|
 | `remember/archive.ts` | `video.test.ts` |
+| `remember/ensure-dir.ts` | `ensure-dir.test.ts` |
 | `remember/file-indexer.ts` | `file-indexing.test.ts`, `version.test.ts` |
 | `remember/index.ts` | `version.test.ts` |
 | `remember/scheduler.ts` | `version.test.ts` |
@@ -54,6 +55,8 @@ The following 6 source files are not directly imported by any test file:
 |-----------|---------------------|
 | `tests/archival.test.ts` | 1 files |
 | `tests/archive-names.test.ts` | 1 files |
+| `tests/bare-paths.test.ts` | 0 files |
+| `tests/ensure-dir.test.ts` | 1 files |
 | `tests/file-indexing.test.ts` | 1 files |
 | `tests/protocol.test.ts` | 0 files |
 | `tests/recall.test.ts` | 1 files |

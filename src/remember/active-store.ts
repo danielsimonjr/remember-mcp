@@ -6,7 +6,7 @@
  */
 
 import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
+import { ensureDir } from "./ensure-dir.ts";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
@@ -75,7 +75,7 @@ export class ActiveStore {
   constructor(dbPath: string) {
     this.dbPath = dbPath;
     if (dbPath !== ":memory:") {
-      mkdirSync(dirname(dbPath), { recursive: true });
+      ensureDir(dirname(dbPath));
     }
     this.db = new Database(dbPath, { create: true });
     this.db.exec("PRAGMA journal_mode=WAL");

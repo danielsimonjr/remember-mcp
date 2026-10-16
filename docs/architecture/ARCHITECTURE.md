@@ -199,6 +199,8 @@ The archive index in memory has two levels. The first level is the user key. The
 
 All paths are relative to the working directory of the server process. The MCP client sets that directory.
 
+- **Folder creation.** Each module that writes to a folder calls `ensureDir`. The function skips `mkdirSync` for a folder that exists. A bare file name like `remember_mcp.db` has `.` as its folder. Some Bun releases on Windows throw an error. The error happens when `mkdirSync` receives `.`, `..`, or `./`.
+
 ## Build and packaging
 
 - `package.json` declares `bin` as `./src/index.ts` and `main` as `./src/index.ts`. The `exports` field offers `.` and `./server`.
@@ -242,6 +244,8 @@ The tests run with `bun test`. The type check runs with `bun run typecheck`. Bot
 |---|---|
 | `archival.test.ts` | An archive pass moves only low-salience memories and keeps the totals. The default owner archives under `default`. An empty pass does nothing. `age_days` 0 is a real value. |
 | `archive-names.test.ts` | Two archive passes in the same second keep both archives. A pass skips a name that a file on disk holds. A failed encode in the same second keeps the earlier archive. A restart rebuilds the index of both archives. |
+| `bare-paths.test.ts` | Each module that creates a folder accepts a bare file name, `.` and `./`. A child process with an empty working directory runs each case. A started server answers `get_stats` with the default paths. |
+| `ensure-dir.test.ts` | `ensureDir` creates nested folders, accepts a folder that exists, accepts `.`, `..` and `./`, and throws for a path that names a file. |
 | `recall.test.ts` | An archived memory can be recalled. A recall from an unknown archive leaves active storage unchanged. |
 | `video.test.ts` | Encoding and searching a sidecar round-trip. A query reaches archived memories. |
 | `file-indexing.test.ts` | A text file is indexed and found by search. A path outside the allowed roots is refused. |
@@ -253,8 +257,8 @@ The tests run with `bun test`. The type check runs with `bun run typecheck`. Bot
 
 Gaps that a reader must know:
 
-- No test calls a tool. The protocol tests stop at `initialize` and `tools/list`. The tool handlers, the argument coercion, the error mapping and the server wrapper have no behavior test.
-- The suites use absolute paths under a temporary folder. No test uses the bare file names that the server uses.
+- One test calls a tool: `bare-paths.test.ts` calls `get_stats`. The protocol tests stop at `initialize` and `tools/list`. The other 12 tool handlers, the argument coercion, the error mapping and the server wrapper have no behavior test.
+- The path cases of `bare-paths.test.ts` also pass on a runtime that accepts `mkdirSync` with `.`. They show the defect only on a runtime that throws. The other suites use absolute paths under a temporary folder.
 - No test imports `ArchivalScheduler`, `classifySectors`, `embed` or `chunkCodeWithLines`. The engine tests reach the classifier and `embed` through `RememberSystem`. No test reaches the scheduler. The only file-indexing test indexes a `.txt` file, so no test reaches the line-aware chunker.
 
 The generated report [TEST_COVERAGE.md](TEST_COVERAGE.md) lists the source files that no test imports directly.
@@ -268,7 +272,7 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 23 | repo-tools map (whole repository) |
-| totalLinesOfCode | 3431 | repo-tools map (whole repository) |
+| totalSourceFiles | 26 | repo-tools map (whole repository) |
+| totalLinesOfCode | 3668 | repo-tools map (whole repository) |
 | runtimeCircularDeps | 0 | repo-tools map (whole repository) |
 | typeOnlyCircularDeps | 0 | repo-tools map (whole repository) |

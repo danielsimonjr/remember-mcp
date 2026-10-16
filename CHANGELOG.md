@@ -18,6 +18,18 @@ All notable changes to this project will be documented in this file.
   on the old code (0 pass, 4 fail) and passes now. One test forces a failed encode by
   removing `ffmpeg` from the path.
 
+- **A bare database file name no longer makes the server fail with `EEXIST`.** The server
+  uses the database path `remember_mcp.db`, and the folder of that path is `.`. Bun 1.4.3
+  on Windows throws `EEXIST` for `mkdirSync(".", { recursive: true })`, and `ENOENT` for
+  `./`. `ActiveStore` made that call, so the first tool call failed with
+  `EEXIST: file already exists, mkdir '.'`. The archive folder, the two folders in
+  `archive.ts` and the index folder made the same call. The new `ensureDir` in
+  `src/remember/ensure-dir.ts` skips `mkdirSync` for a folder that exists, and all five
+  call sites use it. The new test files `tests/bare-paths.test.ts` and
+  `tests/ensure-dir.test.ts` fail on the old call sites (7 of 12 fail) and pass now.
+  Putting the old call back at any one of the five sites makes at least one test fail. CI
+  pins Bun 1.4.2, where the old call works, so CI cannot show this failure.
+
 ### Changed
 
 - **Dependabot no longer carries a dead npm entry.** No dependency-update ecosystem

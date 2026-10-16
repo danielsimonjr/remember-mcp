@@ -202,5 +202,5 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 23 | repo-tools map (whole repository) |
+| totalSourceFiles | 26 | repo-tools map (whole repository) |
 | entryRoots | 3 | repo-tools map (whole repository) |
