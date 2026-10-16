@@ -249,7 +249,7 @@ The tests run with `bun test`. The type check runs with `bun run typecheck`. Bot
 | `recall.test.ts` | An archived memory can be recalled. A recall from an unknown archive leaves active storage unchanged. |
 | `scheduler.test.ts` | `runNow` returns false and runs no pass while `enabled` is false, and returns true after a pass otherwise. A timer pass does nothing while `enabled` is false. A started server answers `run_now` with `Scheduler not started` before `start` and with `Archival triggered` after it. |
 | `video.test.ts` | Encoding and searching a sidecar round-trip. A query reaches archived memories. |
-| `file-indexing.test.ts` | A text file is indexed and found by search. A path outside the allowed roots is refused. A hit of a code file carries `line_info`, which is the header of its chunk. A text chunk that starts with a link reference has no `line_info`, and a file indexed without line chunks has none. |
+| `file-indexing.test.ts` | A text file is indexed and found by search. A path outside the allowed roots is refused. A hit of a code file carries `line_info`, which is the header of its chunk. A text chunk that starts with a link reference has no `line_info`, and a file indexed without line chunks has none. A file that is not valid UTF-8 is refused and nothing is recorded, and a directory run lists the refused file in `errors`. |
 | `protocol.test.ts` | The server starts on stdio, negotiates a protocol version, lists the expected tools, and answers `initialize` within the budget. |
 | `tool-contract.test.ts` | The registered tools are exactly the expected 13, and every tool has a description. |
 | `version.test.ts` | The exported version equals the version in `package.json`. |
@@ -274,6 +274,6 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 | Claim | Value | Source |
 |---|---|---|
 | totalSourceFiles | 27 | repo-tools map (whole repository) |
-| totalLinesOfCode | 3920 | repo-tools map (whole repository) |
+| totalLinesOfCode | 4019 | repo-tools map (whole repository) |
 | runtimeCircularDeps | 0 | repo-tools map (whole repository) |
 | typeOnlyCircularDeps | 0 | repo-tools map (whole repository) |

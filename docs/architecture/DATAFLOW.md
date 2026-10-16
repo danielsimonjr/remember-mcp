@@ -127,6 +127,7 @@ The path never reads the archive. The caller supplies the content.
 4. The method refuses a file above the size limit.
 5. The method hashes the file bytes. When the hash is already in `metadata`, the method returns `already_indexed`.
 6. The method refuses PDF and EPUB files, and files with a zero byte in the first 8192 bytes.
+   The method then decodes the bytes as strict UTF-8 and refuses a file that is not valid UTF-8.
 7. For a code type with `preserve_lines`, `chunkCodeWithLines()` builds the chunks. For other files, `chunkText()` builds them.
 8. `encodeChunks()` writes `<hash>.mp4` and `<hash>.json` in the index folder.
 9. `_recordIndex()` stores the metadata under the hash, writes `file_metadata.json`, and returns the result.

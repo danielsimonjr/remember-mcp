@@ -141,4 +141,97 @@ describe("file indexing", () => {
       indexer.close();
     }, 120_000);
   });
+
+  describe("a file that is not valid UTF-8", () => {
+    function setup() {
+      const root = tmp();
+      const docs = join(root, "docs");
+      mkdirSync(docs, { recursive: true });
+      const indexer = new FileIndexer({
+        index_dir: join(root, "index"),
+        allowed_roots: [docs],
+      });
+      return { docs, indexer };
+    }
+
+    async function refusal(indexer: FileIndexer, filePath: string): Promise<Error | undefined> {
+      try {
+        await indexer.indexFile({ file_path: filePath });
+      } catch (err) {
+        return err as Error;
+      }
+      return undefined;
+    }
+
+    test("a Latin-1 file is refused with a clear message and nothing is recorded", async () => {
+      const { docs, indexer } = setup();
+      const filePath = join(docs, "latin1.txt");
+      // "cafe ok" with the Latin-1 byte 0xE9 for the last letter of "cafe". The byte is not valid
+      // UTF-8, and the file has no zero byte, so the binary check does not refuse it first.
+      writeFileSync(filePath, Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x20, 0x6f, 0x6b]));
+
+      const err = await refusal(indexer, filePath);
+      expect(err).toBeDefined();
+      expect(err!.name).toBe("PermissionError");
+      expect(err!.message).toContain("Refusing to index non-UTF-8 file:");
+      expect(err!.message).toContain("latin1.txt");
+      expect(indexer.listIndexedFiles().length).toBe(0);
+      indexer.close();
+    }, 120_000);
+
+    test("an invalid continuation byte is refused", async () => {
+      const { docs, indexer } = setup();
+      const filePath = join(docs, "broken.txt");
+      writeFileSync(filePath, Buffer.from([0x61, 0x62, 0xc3, 0x28, 0x63]));
+
+      const err = await refusal(indexer, filePath);
+      expect(err).toBeDefined();
+      expect(err!.name).toBe("PermissionError");
+      expect(indexer.listIndexedFiles().length).toBe(0);
+      indexer.close();
+    }, 120_000);
+
+    test("a valid UTF-8 file with non-ASCII text is still indexed", async () => {
+      const { docs, indexer } = setup();
+      const filePath = join(docs, "cafe.txt");
+      writeFileSync(filePath, "caf\u00e9 \u2615 and na\u00efve plans for the quarterly review\n", "utf8");
+
+      const result = await indexer.indexFile({ file_path: filePath });
+      expect(result.status).toBe("indexed");
+      const hits = indexer.search({ query: "quarterly review plans", top_k: 3 });
+      expect(hits.length).toBeGreaterThan(0);
+      expect(String(hits[0]!.content)).toContain("caf\u00e9");
+      indexer.close();
+    }, 120_000);
+
+    test("a valid UTF-8 file that starts with a byte order mark decodes as before", async () => {
+      const { docs, indexer } = setup();
+      const filePath = join(docs, "bom.txt");
+      writeFileSync(
+        filePath,
+        Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("plain text after a byte order mark\n")]),
+      );
+
+      const result = await indexer.indexFile({ file_path: filePath });
+      expect(result.status).toBe("indexed");
+      // `Buffer.toString` kept the mark in the text, and the strict decoder must keep it too.
+      const hits = indexer.search({ query: "plain text byte order mark", top_k: 1 });
+      expect(String(hits[0]!.content).startsWith("\ufeff")).toBe(true);
+      indexer.close();
+    }, 120_000);
+
+    test("a directory run records the refused file as an error and indexes the others", async () => {
+      const { docs, indexer } = setup();
+      writeFileSync(join(docs, "good.txt"), "a plain ASCII file about the retention policy\n");
+      writeFileSync(join(docs, "latin1.txt"), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x20, 0x6f, 0x6b]));
+
+      const result = await indexer.indexDirectory({ dir_path: docs });
+      expect(result.indexed_count).toBe(1);
+      expect(result.error_count).toBe(1);
+      const errors = result.errors as Array<{ file: string; error: string }>;
+      expect(errors[0]!.file).toContain("latin1.txt");
+      expect(errors[0]!.error).toContain("Refusing to index non-UTF-8 file:");
+      indexer.close();
+    }, 120_000);
+  });
 });
