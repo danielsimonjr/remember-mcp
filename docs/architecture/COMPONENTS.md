@@ -322,7 +322,7 @@ Behavior notes:
 - **Directory scan.** `indexDirectory` scans with `Bun.Glob`, files only. For each match the function skips a path outside the folder, a path that contains an exclude string, and a dotfile path. The remaining files go through `indexFile`, one at a time.
 - **Directory cap.** The scan stops when it meets the 501st candidate. The result then holds an error entry for the stop.
 - **Search.** `search` takes the top `top_k` chunks of each file that passes the filters, merges them, sorts them, and keeps `top_k`. The method skips a file whose video or sidecar is missing.
-- **`line_info`.** The method adds `line_info` when the chunk text starts with `[` and contains `]:`. The header from `chunkCodeWithLines` does not contain `]:`.
+- **`line_info`.** The method adds `line_info` to a hit when the metadata of the file has `chunks_meta`, which means the indexer split the file by lines. The value is the header `[name:first-last]` at the start of the chunk, without its line break. A hit of any other file never has `line_info`.
 - **Lookup.** `getFileInfo` matches the stored path, then the resolved path, and then the content hash of the file when the file exists.
 - **Size limit.** The default limit is 32 MiB. The check uses the file size before the indexer reads the file.
 - **`close`.** The method does nothing. A search reads sidecar files and keeps nothing open.

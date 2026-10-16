@@ -230,7 +230,7 @@ Search every indexed file.
 | `file_filter` | string | no | Keeps files whose path contains this text. |
 | `file_type_filter` | string | no | Keeps files of exactly this type, such as `typescript`. |
 
-Result: a list of at most `top_k` objects, sorted by `score`. Each object has `content`, `score`, `file_path`, `file_name`, `file_type`, `file_hash` and `indexed_at`. The tool adds `line_info` when the chunk text starts with `[` and contains `]:`. The header that a code chunk carries ends with `]` and a line break, so a code chunk does not meet this rule.
+Result: a list of at most `top_k` objects, sorted by `score`. Each object has `content`, `score`, `file_path`, `file_name`, `file_type`, `file_hash` and `indexed_at`. The tool adds `line_info` to a hit of a file that the indexer split by lines. The value is the header at the start of the chunk, without its line break, for example `[sample.ts:1-20]`. A hit of any other file has no `line_info`, whatever its text starts with.
 
 A file whose video or sidecar is missing is skipped without an error.
 

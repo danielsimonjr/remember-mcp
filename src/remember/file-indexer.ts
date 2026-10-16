@@ -84,6 +84,12 @@ function looksBinary(sample: Buffer): boolean {
   return sample.includes(0);
 }
 
+// The header that `chunkCodeWithLines` writes before the lines of a chunk, without its line break.
+function lineHeaderOf(chunkText: string): string | undefined {
+  const match = /^\[.*:\d+-\d+\]\n/.exec(chunkText);
+  return match ? match[0].slice(0, -1) : undefined;
+}
+
 function chunkCodeWithLines(
   content: string,
   filename: string,
@@ -543,13 +549,9 @@ export class FileIndexer {
             file_hash: fileHash,
             indexed_at: meta.indexed_at,
           };
-          if (
-            typeof hit.text === "string" &&
-            hit.text.startsWith("[") &&
-            hit.text.includes("]:")
-          ) {
-            result.line_info = hit.text.split("]", 1)[0] + "]";
-          }
+          // Only a file that was indexed with line chunks has a header on every chunk.
+          const lineInfo = Array.isArray(meta.chunks_meta) ? lineHeaderOf(hit.text) : undefined;
+          if (lineInfo !== undefined) result.line_info = lineInfo;
           results.push(result);
         }
       } catch (err) {

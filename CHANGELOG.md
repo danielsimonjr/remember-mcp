@@ -18,6 +18,17 @@ All notable changes to this project will be documented in this file.
   ignores the result makes 1 fail. One test starts the server and calls `scheduler_control`
   before and after `start`.
 
+- **`search_files` now sets `line_info` for a code chunk, and no longer sets it for a text
+  chunk that starts with a link reference.** `FileIndexer.search` set `line_info` when the
+  chunk text started with `[` and contained `]:`. The header that `chunkCodeWithLines` writes
+  is `[name:first-last]` and a line break, so a code chunk got `line_info` only when its body
+  held `]:`, and a text chunk such as `[1]: https://example.com` got the wrong value `[1]`.
+  The search now sets `line_info` only for a file whose metadata has `chunks_meta` (the
+  indexer split the file by lines), and only when the chunk starts with a header of that
+  form. The value is the header without its line break. Three new tests in
+  `tests/file-indexing.test.ts`: two fail on the old code. The third passes on the old code,
+  and fails when the `chunks_meta` condition is removed from the new code.
+
 - **Two archive passes in the same second no longer share one archive name.** An archive
   name is `user_<key>_<unix seconds>`. Two passes for one key in one second wrote the same
   names, so the later pass replaced the files of the earlier archive. When the later pass
