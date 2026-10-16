@@ -1,9 +1,9 @@
 /**
  * Folder creation that accepts a folder that already exists.
  *
- * `mkdirSync(path, { recursive: true })` should do nothing for a folder that exists. Bun 1.4.3 on
- * Windows throws EEXIST for `.` and `..`, and ENOENT for `./`. A bare file name such as
- * `remember_mcp.db` has `.` as its directory, so the default database path hit this error.
+ * `mkdirSync(path, { recursive: true })` should do nothing for a folder that exists. Bun on Windows
+ * throws EEXIST for `.` (Bun 1.4.2 and 1.4.3). Bun 1.4.3 also throws EEXIST for `..` and ENOENT for
+ * `./`. A bare file name such as `remember_mcp.db` has `.` as its directory, so it hit this error.
  */
 
 import { mkdirSync, statSync } from "node:fs";

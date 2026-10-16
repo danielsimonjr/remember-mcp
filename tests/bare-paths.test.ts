@@ -7,7 +7,7 @@ import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/server";
 
 /**
  * A bare file name has `.` as its directory, and `..` and `.` name a directory that always exists.
- * Bun 1.4.3 on Windows throws EEXIST for `mkdirSync(".", { recursive: true })`, and Node does not.
+ * Bun on Windows throws EEXIST for `mkdirSync(".", { recursive: true })`; Bun on Linux does not.
  * Each test runs the code in a child process whose working directory is a new empty folder.
  */
 describe("bare and relative paths", () => {

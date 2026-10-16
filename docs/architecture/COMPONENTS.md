@@ -291,7 +291,7 @@ export function ensureDir(dir: string): void;
 Behavior notes:
 
 - **Purpose.** The function creates a folder and its missing parents. The function does nothing when the folder exists.
-- **Reason.** `mkdirSync` with `recursive` must accept a folder that exists. In some Bun releases on Windows, it throws `EEXIST` for `.` and `..`, and `ENOENT` for `./`. A bare file name such as `remember_mcp.db` has `.` as its parent folder.
+- **Reason.** `mkdirSync` with `recursive` must accept a folder that exists. Bun on Windows can throw `EEXIST` for `.`, and the call succeeds on Linux. Some Bun releases also throw `EEXIST` for `..` and `ENOENT` for `./`. A bare file name such as `remember_mcp.db` has `.` as its parent folder.
 - **Method.** The function reads the path with `statSync`. `existsSync` can report `false` for `./`, so the function does not use it.
 - **Errors.** A path that names a file still throws, because `mkdirSync` reports it.
 - **Callers.** `ActiveStore` uses it for the database folder. `RememberSystem` uses it for the archive folder. `archive.ts` uses it for the folders of the sidecar and the video. `FileIndexer` uses it for the index folder.
