@@ -114,8 +114,8 @@ The path never reads the archive. The caller supplies the content.
 
 ### scheduler_control: stop and run_now
 
-- `stop()` clears the timer and sets `running` to false.
-- `runNow()` calls `_runArchival()` once. `_runArchival()` returns at once when `enabled` is false. The scheduler of the MCP server starts with `enabled` set to false, so a `run_now` call before the first `start` does no work.
+- `stop()` clears the timer and sets `running` to false. The method leaves `enabled` as it was, so a `run_now` call after `stop` runs a pass.
+- `runNow()` returns false and runs no pass while `enabled` is false. Otherwise `runNow()` calls `_runArchival()` once and returns true. The scheduler of the MCP server starts with `enabled` set to false. A `run_now` call before the first `start` therefore runs no pass, and the tool answers `Scheduler not started`.
 
 ## File operations
 
@@ -202,5 +202,5 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 26 | repo-tools map (whole repository) |
+| totalSourceFiles | 27 | repo-tools map (whole repository) |
 | entryRoots | 3 | repo-tools map (whole repository) |
