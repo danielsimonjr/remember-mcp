@@ -89,6 +89,7 @@ An archive that fails to read is logged to standard error and skipped.
 Limits of this path:
 
 - A second is free when the archive index has no entry for it and the folder has no video or sidecar of that name. A second pass for the same key in the same second therefore uses the next second.
+- No lock covers two server processes on one archive folder. The pick and the first write are separate steps, so two processes can pick one name.
 - A QR frame holds a limited number of bytes. A slice of 800 characters that are three bytes long each is too large, so step 7 throws. The same rows are then eligible again in the next pass.
 
 ### recall_memory

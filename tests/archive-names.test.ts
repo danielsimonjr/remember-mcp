@@ -92,6 +92,45 @@ describe("archive names", () => {
     s.close();
   }, 120_000);
 
+  /** Run `fn` while no `ffmpeg` can be found on the path, so every encode fails. */
+  async function withoutFfmpeg<T>(emptyDir: string, fn: () => Promise<T>): Promise<T> {
+    const key = Object.keys(process.env).find((k) => k.toUpperCase() === "PATH") ?? "PATH";
+    const saved = process.env[key];
+    process.env[key] = emptyDir;
+    try {
+      return await fn();
+    } finally {
+      if (saved === undefined) delete process.env[key];
+      else process.env[key] = saved;
+    }
+  }
+
+  test("a failed encode in the same second keeps the earlier archive", async () => {
+    const dir = tmp();
+    const s = system(dir);
+    const fixedMs = Date.now() + 60_000;
+
+    await s.addMemory({ content: "zeta runbook for the first archive" });
+    const first = await atFixedTime(fixedMs, () => archive(s));
+    expect(first.archived_count).toBe(1);
+    const archiveDir = join(dir, "archives");
+    const before = readdirSync(archiveDir).sort();
+    expect(before.length).toBe(2);
+
+    await s.addMemory({ content: "eta postmortem for the failed pass" });
+    const second = await atFixedTime(fixedMs, () => withoutFfmpeg(dir, () => archive(s)));
+
+    expect(second.archived_count).toBe(0);
+    expect(readdirSync(archiveDir).sort()).toEqual(before);
+    expect(Object.keys(s.archiveIndex["default"] ?? {}).length).toBe(1);
+    const stats = await s.getStats();
+    expect(stats.archive_count).toBe(1);
+    expect(stats.active_count).toBe(1);
+    const hits = await s.query({ query: "zeta runbook first archive", k: 5 });
+    expect(hits.some((h) => h.location === "archive" && h.content.includes("zeta"))).toBe(true);
+    s.close();
+  }, 120_000);
+
   test("a restart rebuilds the index of both archives", async () => {
     const dir = tmp();
     const s = system(dir);

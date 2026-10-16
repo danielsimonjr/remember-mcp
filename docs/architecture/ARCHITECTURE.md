@@ -195,7 +195,7 @@ The archive index in memory has two levels. The first level is the user key. The
 - **Indexed files** live in a separate folder. The metadata file is the only record of which path an indexed file came from.
 - **Writes of sidecars and metadata** go to a temporary file first, and a rename completes them. A reader never sees a partial file.
 - **Deletes.** `ActiveStore.deleteByIds()` removes the active rows of a committed archive. `removeArchiveOutputs()` removes the video and the sidecar at the two paths that it receives, after a failed encode. Those names are new, so the call removes only the files of the failed pass. The code has no tool that deletes an archive or an indexed file.
-- **Unique archive names.** `_nextArchiveTimestamp` picks the first second, from now on, with no index entry and no video or sidecar in the folder. Two archive passes for one key in the same second therefore get different names. No pass replaces an existing archive. See [DATAFLOW.md](DATAFLOW.md#archive_memories).
+- **Unique archive names.** `_nextArchiveTimestamp` picks the first second, from now on, with no index entry and no video or sidecar in the folder. Two archive passes of one `RememberSystem` for one key in the same second therefore get different names. No pass replaces an existing archive. The archive lock belongs to one `RememberSystem`. Two server processes on one archive folder share no lock, so this rule does not cover them. See [DATAFLOW.md](DATAFLOW.md#archive_memories).
 
 All paths are relative to the working directory of the server process. The MCP client sets that directory.
 
@@ -241,7 +241,7 @@ The tests run with `bun test`. The type check runs with `bun run typecheck`. Bot
 | Suite | What it asserts |
 |---|---|
 | `archival.test.ts` | An archive pass moves only low-salience memories and keeps the totals. The default owner archives under `default`. An empty pass does nothing. `age_days` 0 is a real value. |
-| `archive-names.test.ts` | Two archive passes in the same second keep both archives. A pass skips a name that a file on disk holds. A restart rebuilds the index of both archives. |
+| `archive-names.test.ts` | Two archive passes in the same second keep both archives. A pass skips a name that a file on disk holds. A failed encode in the same second keeps the earlier archive. A restart rebuilds the index of both archives. |
 | `recall.test.ts` | An archived memory can be recalled. A recall from an unknown archive leaves active storage unchanged. |
 | `video.test.ts` | Encoding and searching a sidecar round-trip. A query reaches archived memories. |
 | `file-indexing.test.ts` | A text file is indexed and found by search. A path outside the allowed roots is refused. |
@@ -269,6 +269,6 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 | Claim | Value | Source |
 |---|---|---|
 | totalSourceFiles | 23 | repo-tools map (whole repository) |
-| totalLinesOfCode | 3392 | repo-tools map (whole repository) |
+| totalLinesOfCode | 3431 | repo-tools map (whole repository) |
 | runtimeCircularDeps | 0 | repo-tools map (whole repository) |
 | typeOnlyCircularDeps | 0 | repo-tools map (whole repository) |

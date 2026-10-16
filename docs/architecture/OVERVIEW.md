@@ -17,13 +17,13 @@ The first four rows come from `repo-tools map`. The scope of each row is the who
 | Metric | Value | Scope | Source |
 |---|---|---|---|
 | Source files | 23 | whole repository | `repo-tools map` |
-| Lines of code | 3392 | whole repository | `repo-tools map` |
+| Lines of code | 3431 | whole repository | `repo-tools map` |
 | Exports | 57 | whole repository | `repo-tools map` |
 | Entry roots | 3 | whole repository | `repo-tools map` |
 | Files in `src/` | 14 | `src/` only | `file-inventory.json`, area `src` |
 | Lines in `src/` | 2733 | `src/` only | `file-inventory.json`, area `src` |
 | Files in `tests/` | 9 | `tests/` only | `file-inventory.json`, area `tests` |
-| Lines in `tests/` | 659 | `tests/` only | `file-inventory.json`, area `tests` |
+| Lines in `tests/` | 698 | `tests/` only | `file-inventory.json`, area `tests` |
 | MCP tools | 13 | `src/tools.ts` | direct count of the `TOOLS` array |
 
 The three entry roots are `src/index.ts` (the `bin` entry), `src/server.ts` (the `./server` export) and `src/remember/index.ts` (the `.` export).
@@ -48,7 +48,7 @@ remember-mcp/
 │       ├── scheduler.ts        ArchivalScheduler: timer for archive passes
 │       ├── file-indexer.ts     FileIndexer: file chunking, indexing and search
 │       └── types.ts            shared types and the sector list
-├── tests/                      9 files, 659 lines (8 test files and one stdio helper)
+├── tests/                      9 files, 698 lines (8 test files and one stdio helper)
 ├── docs/architecture/          this documentation set
 ├── README.md
 ├── CHANGELOG.md
@@ -107,7 +107,7 @@ The claims come from `repo-tools map .`, which reads the whole repository. The o
 | Claim | Value | Source |
 |---|---|---|
 | totalSourceFiles | 23 | repo-tools map (whole repository) |
-| totalLinesOfCode | 3392 | repo-tools map (whole repository) |
+| totalLinesOfCode | 3431 | repo-tools map (whole repository) |
 | totalExports | 57 | repo-tools map (whole repository) |
 | entryRoots | 3 | repo-tools map (whole repository) |
 | orphanedFiles | 1 | repo-tools map (whole repository) |

@@ -102,7 +102,7 @@ Behavior notes:
 
 - Without `user_id`, the pass selects the memories of every owner and stores them in one archive under the key `default`.
 - The archive files are `user_<key>_<unix seconds>.mp4` and `user_<key>_<unix seconds>.json` in the archive directory.
-- A pass uses the first second that the index and the archive directory do not use for the key. Two passes in the same second write different files.
+- A pass uses the first second that the index and the archive directory do not use for the key. Two passes of one `RememberSystem` in the same second write different files.
 
 Errors: `invalid_argument` for a negative `age_days`.
 

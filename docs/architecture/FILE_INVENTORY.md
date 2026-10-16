@@ -58,7 +58,7 @@ This report lists each source file that the map census finds, with a disposition
 | `src/tools.ts` | remember-mcp | src | reachable | 541 |
 | `src/version.ts` | remember-mcp | src | reachable | 5 |
 | `tests/archival.test.ts` | (root) | tests | test | 95 |
-| `tests/archive-names.test.ts` | (root) | tests | test | 110 |
+| `tests/archive-names.test.ts` | (root) | tests | test | 149 |
 | `tests/file-indexing.test.ts` | (root) | tests | test | 78 |
 | `tests/mcp-stdio.ts` | (root) | tests | test | 81 |
 | `tests/protocol.test.ts` | (root) | tests | test | 104 |
