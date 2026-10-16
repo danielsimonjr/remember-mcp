@@ -8,7 +8,7 @@ This report lists each source file that the map census finds, with a disposition
 
 **Language**: typescript
 
-**Total files**: 26
+**Total files**: 27
 
 ## Disposition counts
 
@@ -18,25 +18,25 @@ This report lists each source file that the map census finds, with a disposition
 | `build-entry` | 3 | A `src`-area file that is an entry root. |
 | `test-only` | 0 | A `src`-area file that only a test reaches. |
 | `orphan` | 1 | A `src`-area file that nothing reaches. Delete it, or wire it to a root. |
-| `test` | 11 | A file in a `tests/` folder, or a `*.test.ts` or `*.spec.ts` file. |
+| `test` | 12 | A file in a `tests/` folder, or a `*.test.ts` or `*.spec.ts` file. |
 | `tool` | 0 | A file in a `tools/` or `scripts/` folder outside `src/`. |
 | `config` | 0 | A `*.config.*` file of TypeScript or JavaScript. |
 | `example` | 0 | A file in `examples/` or `docs/`. |
 | `bench` | 0 | A file in `bench/` or `benchmarks/`, or a `*.bench.*` file. |
-| **Total** | **26** | |
+| **Total** | **27** | |
 
 ## Per-area counts
 
 | Area | Files |
 | --- | --: |
 | `src` | 15 |
-| `tests` | 11 |
+| `tests` | 12 |
 
 ## Per-package counts
 
 | Package | Files |
 | --- | --: |
-| `(root)` | 11 |
+| `(root)` | 12 |
 | `remember-mcp` | 15 |
 
 ## All files
@@ -51,7 +51,7 @@ This report lists each source file that the map census finds, with a disposition
 | `src/remember/ensure-dir.ts` | remember-mcp | src | reachable | 29 |
 | `src/remember/file-indexer.ts` | remember-mcp | src | reachable | 619 |
 | `src/remember/index.ts` | remember-mcp | src | build-entry | 11 |
-| `src/remember/scheduler.ts` | remember-mcp | src | reachable | 103 |
+| `src/remember/scheduler.ts` | remember-mcp | src | reachable | 109 |
 | `src/remember/sectors.ts` | remember-mcp | src | reachable | 104 |
 | `src/remember/system.ts` | remember-mcp | src | reachable | 479 |
 | `src/remember/types.ts` | remember-mcp | src | reachable | 76 |
@@ -66,6 +66,7 @@ This report lists each source file that the map census finds, with a disposition
 | `tests/mcp-stdio.ts` | (root) | tests | test | 81 |
 | `tests/protocol.test.ts` | (root) | tests | test | 104 |
 | `tests/recall.test.ts` | (root) | tests | test | 85 |
+| `tests/scheduler.test.ts` | (root) | tests | test | 153 |
 | `tests/tool-contract.test.ts` | (root) | tests | test | 32 |
 | `tests/version.test.ts` | (root) | tests | test | 11 |
 | `tests/video.test.ts` | (root) | tests | test | 63 |

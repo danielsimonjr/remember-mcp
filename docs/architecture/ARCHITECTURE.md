@@ -247,6 +247,7 @@ The tests run with `bun test`. The type check runs with `bun run typecheck`. Bot
 | `bare-paths.test.ts` | Each module that creates a folder accepts a bare file name, `.` and `./`. A child process with an empty working directory runs each case. A started server answers `get_stats` with the default paths. |
 | `ensure-dir.test.ts` | `ensureDir` creates nested folders, accepts a folder that exists, accepts `.`, `..` and `./`, and throws for a path that names a file. |
 | `recall.test.ts` | An archived memory can be recalled. A recall from an unknown archive leaves active storage unchanged. |
+| `scheduler.test.ts` | `runNow` runs one pass when the scheduler never started, and leaves `enabled` as it was. A timer pass does nothing while `enabled` is false. A started server runs `scheduler_control` with `run_now`, and `scheduler_status` then reports `last_run`. |
 | `video.test.ts` | Encoding and searching a sidecar round-trip. A query reaches archived memories. |
 | `file-indexing.test.ts` | A text file is indexed and found by search. A path outside the allowed roots is refused. |
 | `protocol.test.ts` | The server starts on stdio, negotiates a protocol version, lists the expected tools, and answers `initialize` within the budget. |
@@ -257,9 +258,9 @@ The tests run with `bun test`. The type check runs with `bun run typecheck`. Bot
 
 Gaps that a reader must know:
 
-- One test calls a tool: `bare-paths.test.ts` calls `get_stats`. The protocol tests stop at `initialize` and `tools/list`. The other 12 tool handlers, the argument coercion, the error mapping and the server wrapper have no behavior test.
+- Two test files call tools: `bare-paths.test.ts` calls `get_stats`, and `scheduler.test.ts` calls `scheduler_status` and `scheduler_control`. The protocol tests stop at `initialize` and `tools/list`. The other 10 tool handlers, the argument coercion, the error mapping and the server wrapper have no behavior test.
 - The path cases of `bare-paths.test.ts` show the defect only on a runtime that throws for `.`. The runtime of the Windows CI job throws, so that job fails without `ensureDir`. The runtime of the Ubuntu CI job does not throw, so that job passes with or without `ensureDir`. The other suites use absolute paths under a temporary folder.
-- No test imports `ArchivalScheduler`, `classifySectors`, `embed` or `chunkCodeWithLines`. The engine tests reach the classifier and `embed` through `RememberSystem`. No test reaches the scheduler. The only file-indexing test indexes a `.txt` file, so no test reaches the line-aware chunker.
+- No test imports `classifySectors`, `embed` or `chunkCodeWithLines`. The engine tests reach the classifier and `embed` through `RememberSystem`. The only file-indexing test indexes a `.txt` file, so no test reaches the line-aware chunker.
 
 The generated report [TEST_COVERAGE.md](TEST_COVERAGE.md) lists the source files that no test imports directly.
 
@@ -272,7 +273,7 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 26 | repo-tools map (whole repository) |
-| totalLinesOfCode | 3668 | repo-tools map (whole repository) |
+| totalSourceFiles | 27 | repo-tools map (whole repository) |
+| totalLinesOfCode | 3827 | repo-tools map (whole repository) |
 | runtimeCircularDeps | 0 | repo-tools map (whole repository) |
 | typeOnlyCircularDeps | 0 | repo-tools map (whole repository) |

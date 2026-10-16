@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **`scheduler_control` with `run_now` now runs one archive pass before the scheduler has
+  started.** The server builds its scheduler with `enabled` set to false, and `runNow`
+  returned at once while `enabled` was false. The tool still answered `Archival triggered`,
+  and `scheduler_status` kept `last_run` at null. `runNow` now runs the pass whether `enabled`
+  is true or false. The timer pass still does nothing while `enabled` is false, and `stop` and
+  `enabled` keep their meaning. The new test file `tests/scheduler.test.ts` has 7 tests. 4 of
+  them fail on the old code, and putting the old gate back on `runNow` makes the same 4 fail
+  again. Removing the gate from the timer pass makes the test of the timer fail. One test starts
+  the server, calls `scheduler_control` and reads `last_run` from `scheduler_status`.
+
 - **Two archive passes in the same second no longer share one archive name.** An archive
   name is `user_<key>_<unix seconds>`. Two passes for one key in one second wrote the same
   names, so the later pass replaced the files of the earlier archive. When the later pass

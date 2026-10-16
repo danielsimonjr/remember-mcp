@@ -108,14 +108,14 @@ The path never reads the archive. The caller supplies the content.
 
 1. `HANDLERS.scheduler_control` calls `ArchivalScheduler.start()`.
 2. `start()` returns at once when the scheduler already runs. Otherwise the method sets `enabled` and `running`, and schedules `_tick()` with a delay of 0.
-3. `_tick()` calls `_runArchival()`, which calls `RememberSystem.archiveOldMemories()` with the system settings and no owner.
-4. After a successful pass, `_runArchival()` stores `last_run`, adds to `total_archived` and clears `last_error`. `_tick()` schedules the next pass after the interval.
+3. `_tick()` calls `_runArchival()`. The method returns at once when `enabled` is false. Otherwise the method calls `_archiveOnce()`, which calls `RememberSystem.archiveOldMemories()` with the system settings and no owner.
+4. After a successful pass, `_archiveOnce()` stores `last_run`, adds to `total_archived` and clears `last_error`. `_tick()` schedules the next pass after the interval.
 5. After a failed pass, the scheduler stores the message in `last_error` and schedules the next attempt after 60 seconds.
 
 ### scheduler_control: stop and run_now
 
 - `stop()` clears the timer and sets `running` to false.
-- `runNow()` calls `_runArchival()` once. `_runArchival()` returns at once when `enabled` is false. The scheduler of the MCP server starts with `enabled` set to false, so a `run_now` call before the first `start` does no work.
+- `runNow()` calls `_archiveOnce()` once, so the call does the work when `enabled` is false. The scheduler of the MCP server starts with `enabled` set to false, so a `run_now` call before the first `start` runs one pass.
 
 ## File operations
 
@@ -202,5 +202,5 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 26 | repo-tools map (whole repository) |
+| totalSourceFiles | 27 | repo-tools map (whole repository) |
 | entryRoots | 3 | repo-tools map (whole repository) |

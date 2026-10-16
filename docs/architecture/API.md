@@ -160,7 +160,7 @@ The server builds the scheduler with `enabled` set to false. `next_run_in` is nu
 
 - `start` enables the scheduler and schedules the first pass at once. After each pass, the scheduler waits for the interval. After a failed pass, the scheduler waits 60 seconds.
 - `stop` cancels the timer. The `enabled` flag stays as it was.
-- `run_now` calls one archive pass. The pass does nothing while `enabled` is false, which is the state before the first `start`. The tool reports the same status in both cases.
+- `run_now` runs one archive pass at once, whether the scheduler runs or not. The `enabled` flag and the timer stay as they were. When the pass fails, the call throws, and the result is an error with `isError` true.
 
 Result: `{ "status": "Scheduler started" }`, `{ "status": "Scheduler stopped" }` or `{ "status": "Archival triggered" }`.
 
@@ -399,7 +399,7 @@ export class ArchivalScheduler {
 
 Defaults: `intervalSeconds` is 86,400 and `enabled` is true. The constructor throws when `intervalSeconds` is below 1. The MCP server builds the scheduler with `enabled` set to false.
 
-`start` returns at once when the scheduler already runs. `runNow` does nothing while `enabled` is false.
+`start` returns at once when the scheduler already runs. `runNow` runs one pass at once, whether the scheduler runs or not. When the pass fails, `runNow` rejects and stores the message in `last_error`. The timer does nothing while `enabled` is false.
 
 ## Library: types
 
@@ -453,4 +453,4 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 | Claim | Value | Source |
 |---|---|---|
 | totalExports | 58 | repo-tools map (whole repository) |
-| totalSourceFiles | 26 | repo-tools map (whole repository) |
+| totalSourceFiles | 27 | repo-tools map (whole repository) |

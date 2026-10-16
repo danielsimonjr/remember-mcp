@@ -387,7 +387,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
   /**
    * Start or stop the archival scheduler, or run one archival pass at once.
    * `action` is `start`, `stop` or `run_now`.
-   * `run_now` does nothing while `enabled` is false, and the tool still reports that it triggered a pass.
+   * `run_now` runs one pass whether the scheduler runs or not.
    */
   async scheduler_control(raw) {
     await agetSystem();
