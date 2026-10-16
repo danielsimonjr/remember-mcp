@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   ignores the result makes 1 fail. One test starts the server and calls `scheduler_control`
   before and after `start`.
 
+- **`index_file` now refuses a file that is not valid UTF-8, and `index_directory` lists such
+  a file in `errors`.** The indexer decoded every file with `Buffer.toString("utf8")`. That
+  call replaces each invalid byte with U+FFFD and never throws, so a Latin-1 file was
+  indexed with damaged text, and the `catch` branch that refuses a non-UTF-8 file could not
+  run. The indexer now decodes with a fatal `TextDecoder`. The tool answers
+  `{ error: "permission_denied", message: "Refusing to index non-UTF-8 file: <path>" }`
+  and records nothing for the file. A file with a leading byte order mark decodes as
+  before, and the mark stays in the text. A file that the indexer stored before this change
+  keeps its stored text: `index_file` answers `already_indexed` for it, because the check of
+  the content hash runs before the decode. Six new tests in `tests/file-indexing.test.ts`:
+  four fail on the old code (one of them calls `index_file` over MCP), and two pass on
+  both. Each of two mutations of the decoder options (no `fatal`, and `ignoreBOM: false`)
+  fails at least one test.
+
 - **`search_files` now sets `line_info` for a code chunk, and no longer sets it for a text
   chunk that starts with a link reference.** `FileIndexer.search` set `line_info` when the
   chunk text started with `[` and contained `]:`. The header that `chunkCodeWithLines` writes

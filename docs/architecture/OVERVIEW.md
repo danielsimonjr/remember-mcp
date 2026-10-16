@@ -17,13 +17,13 @@ The first four rows come from `repo-tools map`. The scope of each row is the who
 | Metric | Value | Scope | Source |
 |---|---|---|---|
 | Source files | 27 | whole repository | `repo-tools map` |
-| Lines of code | 3920 | whole repository | `repo-tools map` |
+| Lines of code | 4083 | whole repository | `repo-tools map` |
 | Exports | 58 | whole repository | `repo-tools map` |
 | Entry roots | 3 | whole repository | `repo-tools map` |
 | Files in `src/` | 15 | `src/` only | `file-inventory.json`, area `src` |
-| Lines in `src/` | 2769 | `src/` only | `file-inventory.json`, area `src` |
+| Lines in `src/` | 2775 | `src/` only | `file-inventory.json`, area `src` |
 | Files in `tests/` | 12 | `tests/` only | `file-inventory.json`, area `tests` |
-| Lines in `tests/` | 1151 | `tests/` only | `file-inventory.json`, area `tests` |
+| Lines in `tests/` | 1308 | `tests/` only | `file-inventory.json`, area `tests` |
 | MCP tools | 13 | `src/tools.ts` | direct count of the `TOOLS` array |
 
 The three entry roots are `src/index.ts` (the `bin` entry), `src/server.ts` (the `./server` export) and `src/remember/index.ts` (the `.` export).
@@ -32,7 +32,7 @@ The three entry roots are `src/index.ts` (the `bin` entry), `src/server.ts` (the
 
 ```
 remember-mcp/
-├── src/                        15 files, 2769 lines
+├── src/                        15 files, 2775 lines
 │   ├── index.ts                stdio entry: serves the MCP server, handles SIGINT and SIGTERM
 │   ├── server.ts               builds the MCP server and registers every tool
 │   ├── tools.ts                tool definitions, handlers, and the lazy singletons
@@ -49,7 +49,7 @@ remember-mcp/
 │       ├── file-indexer.ts     FileIndexer: file chunking, indexing and search
 │       ├── ensure-dir.ts       ensureDir: creates a folder only when it is missing
 │       └── types.ts            shared types and the sector list
-├── tests/                      12 files, 1151 lines (11 test files and one stdio helper)
+├── tests/                      12 files, 1308 lines (11 test files and one stdio helper)
 ├── docs/architecture/          this documentation set
 ├── README.md
 ├── CHANGELOG.md
@@ -65,7 +65,7 @@ remember-mcp/
 3. **Embeddings need no model.** `embed()` hashes tokens into a 384-dimension unit vector. No dependency downloads a model, and no network call occurs.
 4. **Writers take a lock.** `RememberSystem` runs `addMemory` and the two storage steps of an archive pass under `withWriteLock`, and every archive pass under `withArchiveLock`. `query()` updates salience without the write lock.
 5. **A memory leaves active storage only after its archive exists.** `archiveOldMemories` encodes the archive first and deletes the active rows afterwards. When the encoder fails, the pass archives nothing and deletes nothing.
-6. **File indexing stays inside allowed roots.** `FileIndexer` refuses a path outside the roots, a binary file and a file over 32 MiB. `FileIndexer` refuses a dotfile unless the caller sets `index_dotfiles`.
+6. **File indexing stays inside allowed roots.** `FileIndexer` refuses a path outside the roots and a file over 32 MiB. `FileIndexer` refuses a binary file and a file that is not valid UTF-8. `FileIndexer` refuses a dotfile unless the caller sets `index_dotfiles`.
 7. **Argument errors are values.** A handler returns an object with `error` and `message` for a bad argument. The server layer catches every other throw and returns a result with `isError` set.
 
 ## How the code gets loaded
@@ -108,7 +108,7 @@ The claims come from `repo-tools map .`, which reads the whole repository. The o
 | Claim | Value | Source |
 |---|---|---|
 | totalSourceFiles | 27 | repo-tools map (whole repository) |
-| totalLinesOfCode | 3920 | repo-tools map (whole repository) |
+| totalLinesOfCode | 4083 | repo-tools map (whole repository) |
 | totalExports | 58 | repo-tools map (whole repository) |
 | entryRoots | 3 | repo-tools map (whole repository) |
 | orphanedFiles | 1 | repo-tools map (whole repository) |

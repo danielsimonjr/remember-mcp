@@ -415,6 +415,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
    * Index one file. Returns `already_indexed` when the content hash is known.
    * The function returns a `permission_denied` object for a path outside allowed roots.
    * The function returns `permission_denied` for a dotfile or a binary file.
+   * The function returns `permission_denied` for a file that is not valid UTF-8.
    * The function returns `permission_denied` for a file over the size limit.
    */
   async index_file(raw) {

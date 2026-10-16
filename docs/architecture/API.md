@@ -190,7 +190,7 @@ Errors:
 
 | Code | Cause |
 |---|---|
-| `permission_denied` | A path outside the allowed roots, a dotfile (unless `index_dotfiles` is true), a file larger than 32 MiB, or a file with a zero byte in its first 8192 bytes. |
+| `permission_denied` | A path outside the allowed roots, a dotfile (unless `index_dotfiles` is true), a file larger than 32 MiB, a file with a zero byte in its first 8192 bytes, or a file that is not valid UTF-8. |
 | `not_found` | The path is not a file. |
 | `invalid_argument` | A bad chunk setting, a PDF or EPUB file, or any other error that the indexer raises. |
 

@@ -311,10 +311,10 @@ Behavior notes:
 - **Path policy.** `_enforcePathPolicy` runs first. The function resolves the path. The function checks the path against the allowed roots. The function refuses a dotfile path unless the caller allows it. The function checks that the target is a file or a folder.
 - **Roots.** A root check passes when the path equals a root or lies below it. The function uses a relative-path test, so a sibling folder with a matching name prefix does not pass.
 - **Dotfile rule.** A path is a dotfile path when any segment starts with a dot. A Windows drive letter does not count.
-- **Order of checks in `indexFile`.** Chunk settings, path policy, size limit, content hash, known-hash exit, PDF and EPUB refusal, binary refusal, chunking, encode, record. The known-hash exit comes before the PDF refusal and the binary refusal.
+- **Order of checks in `indexFile`.** Chunk settings, path policy, size limit, content hash, known-hash exit, PDF and EPUB refusal, binary refusal, non-UTF-8 refusal, chunking, encode, record. The known-hash exit comes before the PDF refusal, the binary refusal and the non-UTF-8 refusal.
 - **Duplicate detection.** The key is the SHA-256 digest of the file bytes. A second path with the same bytes returns `already_indexed` with the first path.
 - **Binary test.** A zero byte in the first 8192 bytes marks a file as binary.
-- **Decoding.** The indexer decodes the file as UTF-8. Invalid bytes become the replacement character, and the decode never throws. The `catch` branch that refuses a non-UTF-8 file cannot run.
+- **Decoding.** The indexer decodes the file with a strict UTF-8 decoder that throws on an invalid byte. The `catch` branch then throws a `PermissionError` that names the path, and the indexer records nothing for the file. A leading byte order mark stays in the text.
 - **Line chunks.** For the code types, `chunkCodeWithLines` takes `max(1, floor(chunk_size / 50))` lines per chunk and writes the header `[name:first-last]` and a line break before the lines. The function also builds `chunks_meta` with the line numbers and the character offsets of each chunk.
 - **Window chunks.** `chunkText` returns the whole text as one chunk when the text fits. Otherwise the function cuts windows of `chunk_size` characters, and each window starts `overlap` characters before the end of the last one.
 - **Metadata file.** `file_metadata.json` maps the content hash to the metadata. The indexer writes the file after each indexed file, through a temporary file and a rename.

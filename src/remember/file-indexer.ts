@@ -84,6 +84,11 @@ function looksBinary(sample: Buffer): boolean {
   return sample.includes(0);
 }
 
+// `Buffer.toString("utf8")` replaces an invalid byte with U+FFFD and never throws, so a Latin-1 file
+// was indexed with damaged text. A fatal decoder throws instead. `ignoreBOM` keeps a leading byte
+// order mark in the text, as `toString` did, so a valid file decodes to the same string as before.
+const STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
 // The header that `chunkCodeWithLines` writes before the lines of a chunk, without its line break.
 function lineHeaderOf(chunkText: string): string | undefined {
   const match = /^\[.*:\d+-\d+\]\n/.exec(chunkText);
@@ -345,7 +350,7 @@ export class FileIndexer {
 
     let content: string;
     try {
-      content = data.toString("utf8");
+      content = STRICT_UTF8.decode(data);
     } catch {
       throw Object.assign(
         new Error(`Refusing to index non-UTF-8 file: ${resolved}`),
