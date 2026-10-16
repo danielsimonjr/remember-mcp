@@ -62,7 +62,7 @@ remember-mcp/
 1. **Standard output belongs to the protocol.** The server writes logs and errors to standard error only. The demo in `src/example.ts` prints to standard output, and the server never imports it.
 2. **Heavy work waits for the first tool call.** No module builds a `RememberSystem` or a `FileIndexer` at import time. The `initialize` request stays fast, because SQLite and `ffmpeg` work starts later.
 3. **Embeddings need no model.** `embed()` hashes tokens into a 384-dimension unit vector. No dependency downloads a model, and no network call occurs.
-4. **One writer at a time.** `RememberSystem` runs every write under `withWriteLock` and every archive pass under `withArchiveLock`. A new method that changes state must take a lock.
+4. **Writers take a lock.** `RememberSystem` runs `addMemory` and the two storage steps of an archive pass under `withWriteLock`, and every archive pass under `withArchiveLock`. `query()` updates salience without the write lock.
 5. **A memory leaves active storage only after its archive exists.** `archiveOldMemories` encodes the archive first and deletes the active rows afterwards. When the encoder fails, the pass archives nothing and deletes nothing.
 6. **File indexing stays inside allowed roots.** `FileIndexer` refuses a path outside the roots, a binary file and a file over 32 MiB. `FileIndexer` refuses a dotfile unless the caller sets `index_dotfiles`.
 7. **Argument errors are values.** A handler returns an object with `error` and `message` for a bad argument. The server layer catches every other throw and returns a result with `isError` set.
