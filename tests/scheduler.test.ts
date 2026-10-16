@@ -23,31 +23,35 @@ function stubSystem(archived: number, fail = false) {
 }
 
 describe("ArchivalScheduler.runNow", () => {
-  test("runs one pass although the scheduler was never started", async () => {
+  test("runs no pass and returns false while the scheduler has not started", async () => {
     const { system, calls } = stubSystem(3);
     // The MCP server builds its scheduler like this: `enabled` is false until the first `start`.
     const scheduler = new ArchivalScheduler(system, 3600, false);
+
+    const ran = await scheduler.runNow();
+
+    expect(ran).toBe(false);
+    expect(calls.length).toBe(0);
     expect(scheduler.last_run).toBeNull();
+    expect(scheduler.total_archived).toBe(0);
+  });
 
-    await scheduler.runNow();
+  test("runs one pass and returns true while `enabled` is true", async () => {
+    const { system, calls } = stubSystem(3);
+    const scheduler = new ArchivalScheduler(system, 3600, true);
 
+    const ran = await scheduler.runNow();
+
+    expect(ran).toBe(true);
     expect(calls).toEqual([{ age_days: 60, min_salience: 0.2 }]);
     expect(scheduler.last_run).not.toBeNull();
     expect(scheduler.total_archived).toBe(3);
     expect(scheduler.last_error).toBeNull();
   });
 
-  test("keeps `enabled` as it was", async () => {
-    const { system } = stubSystem(1);
-    const scheduler = new ArchivalScheduler(system, 3600, false);
-    await scheduler.runNow();
-    expect(scheduler.enabled).toBe(false);
-    expect(scheduler.running).toBe(false);
-  });
-
   test("adds the counts of two passes", async () => {
     const { system, calls } = stubSystem(2);
-    const scheduler = new ArchivalScheduler(system, 3600, false);
+    const scheduler = new ArchivalScheduler(system, 3600, true);
     await scheduler.runNow();
     await scheduler.runNow();
     expect(calls.length).toBe(2);
@@ -56,10 +60,25 @@ describe("ArchivalScheduler.runNow", () => {
 
   test("rejects and records the error when the pass fails", async () => {
     const { system } = stubSystem(0, true);
-    const scheduler = new ArchivalScheduler(system, 3600, false);
+    const scheduler = new ArchivalScheduler(system, 3600, true);
     await expect(scheduler.runNow()).rejects.toThrow("archive failed");
     expect(scheduler.last_error).toBe("archive failed");
     expect(scheduler.last_run).toBeNull();
+  });
+
+  test("still runs a pass after `stop`, because `stop` leaves `enabled` as it was", async () => {
+    const { system, calls } = stubSystem(1);
+    const scheduler = new ArchivalScheduler(system, 3600, false);
+    await scheduler.start();
+    const deadline = Date.now() + 5000;
+    while (calls.length === 0 && Date.now() < deadline) await Bun.sleep(10);
+    await scheduler.stop();
+    expect(scheduler.enabled).toBe(true);
+
+    const ran = await scheduler.runNow();
+
+    expect(ran).toBe(true);
+    expect(calls.length).toBe(2);
   });
 });
 
@@ -79,7 +98,6 @@ describe("ArchivalScheduler timer", () => {
   test("a timer pass does nothing while `enabled` is false", async () => {
     const { system, calls } = stubSystem(1);
     const scheduler = new ArchivalScheduler(system, 3600, true);
-    scheduler.enabled = false;
     await scheduler.start();
     // `start` sets `enabled` to true, so clear it again before the first timer pass can run.
     scheduler.enabled = false;
@@ -102,7 +120,7 @@ describe("scheduler_control run_now over MCP", () => {
     }
   });
 
-  test("a run_now before start sets last_run", async () => {
+  test("run_now answers `Scheduler not started` before start, and `Archival triggered` after", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "remember-sched-"));
     dirs.push(cwd);
     const server = spawnServer(cwd);
@@ -138,13 +156,23 @@ describe("scheduler_control run_now over MCP", () => {
       expect(before.last_run).toBeNull();
       expect(before.enabled).toBe(false);
 
+      const refused = await call("scheduler_control", { action: "run_now" });
+      expect(refused.status).toBe("Scheduler not started");
+      const unchanged = await call("scheduler_status", {});
+      expect(unchanged.last_run).toBeNull();
+
+      expect((await call("scheduler_control", { action: "start" })).status).toBe("Scheduler started");
+      const deadline = Date.now() + 10_000;
+      let started = await call("scheduler_status", {});
+      while (started.last_run === null && Date.now() < deadline) {
+        await Bun.sleep(50);
+        started = await call("scheduler_status", {});
+      }
+      expect(typeof started.last_run).toBe("number");
+
       const triggered = await call("scheduler_control", { action: "run_now" });
       expect(triggered.status).toBe("Archival triggered");
-
-      const after = await call("scheduler_status", {});
-      expect(typeof after.last_run).toBe("number");
-      expect(after.running).toBe(false);
-      expect(after.last_error).toBeNull();
+      expect((await call("scheduler_control", { action: "stop" })).status).toBe("Scheduler stopped");
     } finally {
       server.proc.kill();
       await server.proc.exited;

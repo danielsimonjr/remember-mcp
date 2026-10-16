@@ -62,7 +62,7 @@ Behavior notes:
 - **Handlers that do not catch.** `get_stats`, `scheduler_status`, `scheduler_control`, `list_indexed_files`, `get_file_info` and `get_file_stats` have no `try` block. An error from these handlers reaches the server wrapper.
 - **`shutdown`.** The function closes the memory system and the file indexer, each in its own `try` block that writes a failure to standard error. The function then sets the three singletons to null.
 - **`setup`.** The function builds both singletons ahead of time. Tests and benchmarks use the function. The stdio entry does not call it.
-- **`run_now` and `enabled`.** The handler for `scheduler_control` calls `scheduler.runNow()` and reports `Archival triggered`. The call runs one pass whether `enabled` is true or false. The `enabled` flag gates the timer only.
+- **`run_now` and `enabled`.** The handler for `scheduler_control` calls `scheduler.runNow()`. The handler reports `Archival triggered` when `runNow` returns true, and `Scheduler not started` when it returns false. The scheduler runs no pass while `enabled` is false.
 
 ### src/version.ts
 
@@ -264,7 +264,7 @@ Behavior notes:
 - `start` sets `enabled` and `running`, and schedules a pass with a delay of 0. The pass runs `archiveOldMemories` with the threshold and the minimum salience of the memory system, for every owner.
 - After a successful pass, the scheduler waits `interval` seconds. After an error, the scheduler stores the message in `last_error` and waits 60 seconds.
 - `stop` clears the timer and sets `running` to false. The `enabled` flag keeps its value.
-- `runNow` calls `_archiveOnce()` directly, so the call runs one pass whether `enabled` is true or false. `_runArchival()` is the pass of the timer. The method returns at once when `enabled` is false.
+- `runNow` returns false while `enabled` is false. Otherwise `runNow` calls `_runArchival()` and returns true. The timer calls `_runArchival()` too.
 - `getStatus` reports `next_run_in` as the interval minus the time since `last_run`, in whole seconds with a minimum of 0. The value is null while the scheduler is stopped or before the first pass ends.
 
 ### src/remember/types.ts

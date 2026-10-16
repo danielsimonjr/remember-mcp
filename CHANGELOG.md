@@ -6,15 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- **`scheduler_control` with `run_now` now runs one archive pass before the scheduler has
-  started.** The server builds its scheduler with `enabled` set to false, and `runNow`
-  returned at once while `enabled` was false. The tool still answered `Archival triggered`,
-  and `scheduler_status` kept `last_run` at null. `runNow` now runs the pass whether `enabled`
-  is true or false. The timer pass still does nothing while `enabled` is false, and `stop` and
-  `enabled` keep their meaning. The new test file `tests/scheduler.test.ts` has 7 tests. 4 of
-  them fail on the old code, and putting the old gate back on `runNow` makes the same 4 fail
-  again. Removing the gate from the timer pass makes the test of the timer fail. One test starts
-  the server, calls `scheduler_control` and reads `last_run` from `scheduler_status`.
+- **`scheduler_control` with `run_now` now answers `Scheduler not started` before the
+  scheduler has started.** The server builds its scheduler with `enabled` set to false, and
+  `runNow` returned at once while `enabled` was false. The tool still answered `Archival
+  triggered`, and `scheduler_status` kept `last_run` at null. `runNow` now returns true after
+  a pass and false when it ran none, and the tool answers by that value. The call still runs
+  no pass before `start`. The option that `run_now` runs a pass while `enabled` is false was
+  considered and held for the owner, because that pass moves rows out of the active store
+  under the default key. The new test file `tests/scheduler.test.ts` has 8 tests. 4 of them
+  fail on the old code. Removing the gate from `runNow` makes 2 fail, and a handler that
+  ignores the result makes 1 fail. One test starts the server and calls `scheduler_control`
+  before and after `start`.
 
 - **Two archive passes in the same second no longer share one archive name.** An archive
   name is `user_<key>_<unix seconds>`. Two passes for one key in one second wrote the same

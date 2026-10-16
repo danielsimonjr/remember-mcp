@@ -160,9 +160,9 @@ The server builds the scheduler with `enabled` set to false. `next_run_in` is nu
 
 - `start` enables the scheduler and schedules the first pass at once. After each pass, the scheduler waits for the interval. After a failed pass, the scheduler waits 60 seconds.
 - `stop` cancels the timer. The `enabled` flag stays as it was.
-- `run_now` runs one archive pass at once, whether the scheduler runs or not. The `enabled` flag and the timer stay as they were. When the pass fails, the call throws, and the result is an error with `isError` true.
+- `run_now` runs one archive pass while `enabled` is true. Before the first `start`, `enabled` is false: the call then runs no pass and answers `Scheduler not started`. When the pass fails, the call throws, and the result is an error with `isError` true.
 
-Result: `{ "status": "Scheduler started" }`, `{ "status": "Scheduler stopped" }` or `{ "status": "Archival triggered" }`.
+Result: `{ "status": "Scheduler started" }`, `{ "status": "Scheduler stopped" }`, `{ "status": "Archival triggered" }` or `{ "status": "Scheduler not started" }`.
 
 Errors: `invalid_argument` for another action.
 
@@ -392,14 +392,14 @@ export class ArchivalScheduler {
   constructor(rememberSystem: RememberSystem, intervalSeconds?: number, enabled?: boolean);
   start(): Promise<void>;
   stop(): Promise<void>;
-  runNow(): Promise<void>;
+  runNow(): Promise<boolean>;
   getStatus(): Record<string, unknown>;
 }
 ```
 
 Defaults: `intervalSeconds` is 86,400 and `enabled` is true. The constructor throws when `intervalSeconds` is below 1. The MCP server builds the scheduler with `enabled` set to false.
 
-`start` returns at once when the scheduler already runs. `runNow` runs one pass at once, whether the scheduler runs or not. When the pass fails, `runNow` rejects and stores the message in `last_error`. The timer does nothing while `enabled` is false.
+`start` returns at once when the scheduler already runs. `runNow` runs one pass and returns true. While `enabled` is false, `runNow` runs no pass and returns false. When the pass fails, `runNow` rejects and stores the message in `last_error`.
 
 ## Library: types
 

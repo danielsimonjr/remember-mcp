@@ -51,7 +51,7 @@ This report lists each source file that the map census finds, with a disposition
 | `src/remember/ensure-dir.ts` | remember-mcp | src | reachable | 29 |
 | `src/remember/file-indexer.ts` | remember-mcp | src | reachable | 619 |
 | `src/remember/index.ts` | remember-mcp | src | build-entry | 11 |
-| `src/remember/scheduler.ts` | remember-mcp | src | reachable | 109 |
+| `src/remember/scheduler.ts` | remember-mcp | src | reachable | 106 |
 | `src/remember/sectors.ts` | remember-mcp | src | reachable | 104 |
 | `src/remember/system.ts` | remember-mcp | src | reachable | 479 |
 | `src/remember/types.ts` | remember-mcp | src | reachable | 76 |
@@ -66,7 +66,7 @@ This report lists each source file that the map census finds, with a disposition
 | `tests/mcp-stdio.ts` | (root) | tests | test | 81 |
 | `tests/protocol.test.ts` | (root) | tests | test | 104 |
 | `tests/recall.test.ts` | (root) | tests | test | 85 |
-| `tests/scheduler.test.ts` | (root) | tests | test | 153 |
+| `tests/scheduler.test.ts` | (root) | tests | test | 181 |
 | `tests/tool-contract.test.ts` | (root) | tests | test | 32 |
 | `tests/version.test.ts` | (root) | tests | test | 11 |
 | `tests/video.test.ts` | (root) | tests | test | 63 |
