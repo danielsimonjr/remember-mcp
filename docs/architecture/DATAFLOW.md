@@ -80,7 +80,7 @@ An archive that fails to read is logged to standard error and skipped.
 3. `withArchiveLock()` waits for an earlier pass.
 4. Under `withWriteLock()`, `ActiveStore.selectEligible()` returns the rows that are old enough and whose decayed salience is below the minimum.
 5. When no row is eligible, the method returns zero counts.
-6. The method names the files `user_<key>_<unix seconds>.mp4` and `.json` in the archive folder.
+6. The method picks a second with `_nextArchiveTimestamp()`. It names the files `user_<key>_<unix seconds>.mp4` and `.json` in the archive folder.
 7. `encodeChunks()` runs outside the write lock. The function writes the sidecar, writes the QR frames, runs `ffmpeg`, and measures the video.
 8. When step 7 throws, the method logs the error to standard error and returns zero counts. The rows stay in active storage, and `encodeChunks()` has removed its output files.
 9. Under `withWriteLock()`, `_commitArchive()` adds the archive to the index, calls `ActiveStore.deleteByIds()`, and measures the video.
@@ -88,7 +88,7 @@ An archive that fails to read is logged to standard error and skipped.
 
 Limits of this path:
 
-- The names of step 6 use whole seconds. A second pass for the same key in the same second writes the same files. The second pass replaces the first archive and its index entry.
+- A second is free when the archive index has no entry for it and the folder has no video or sidecar of that name. A second pass for the same key in the same second therefore uses the next second.
 - A QR frame holds a limited number of bytes. A slice of 800 characters that are three bytes long each is too large, so step 7 throws. The same rows are then eligible again in the next pass.
 
 ### recall_memory
@@ -201,5 +201,5 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 22 | repo-tools map (whole repository) |
+| totalSourceFiles | 23 | repo-tools map (whole repository) |
 | entryRoots | 3 | repo-tools map (whole repository) |

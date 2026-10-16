@@ -276,8 +276,9 @@ export class RememberSystem {
         };
       }
 
-      const timestamp = Math.floor(Date.now() / 1000);
-      const archiveFilename = `user_${RememberSystem.archiveKey(opts.user_id)}_${timestamp}`;
+      const key = RememberSystem.archiveKey(opts.user_id);
+      const timestamp = this._nextArchiveTimestamp(key);
+      const archiveFilename = `user_${key}_${timestamp}`;
       const videoPath = join(this.archiveDir, `${archiveFilename}.mp4`);
       const indexPath = join(this.archiveDir, `${archiveFilename}.json`);
       const memoryIds = eligible.map((m) => m.id);
@@ -306,6 +307,23 @@ export class RememberSystem {
         }),
       );
     });
+  }
+
+  /**
+   * Return the first Unix second, from now on, that no archive of this key uses.
+   * An archive name holds whole seconds. Two passes in one second would write the same files.
+   * A second is taken when the index lists it.
+   * A second is also taken when a video or a sidecar of that name exists on disk.
+   */
+  private _nextArchiveTimestamp(key: string): number {
+    const indexed = this.archiveIndex[key] ?? {};
+    const taken = (second: number): boolean => {
+      const stem = join(this.archiveDir, `user_${key}_${second}`);
+      return String(second) in indexed || existsSync(`${stem}.mp4`) || existsSync(`${stem}.json`);
+    };
+    let second = Math.floor(Date.now() / 1000);
+    while (taken(second)) second += 1;
+    return second;
   }
 
   private _commitArchive(opts: {

@@ -9,7 +9,7 @@
 | Metric | Count |
 |--------|-------|
 | Total Source Files | 14 |
-| Total Test Files | 7 |
+| Total Test Files | 8 |
 | Source Files with Tests | 8 |
 | Source Files without Tests | 6 |
 | Coverage (raw, direct-import) | **57.1%** |
@@ -41,7 +41,7 @@ The following 6 source files are not directly imported by any test file:
 | `remember/file-indexer.ts` | `file-indexing.test.ts`, `version.test.ts` |
 | `remember/index.ts` | `version.test.ts` |
 | `remember/scheduler.ts` | `version.test.ts` |
-| `remember/system.ts` | `archival.test.ts`, `recall.test.ts`, `version.test.ts`, `video.test.ts` |
+| `remember/system.ts` | `archival.test.ts`, `archive-names.test.ts`, `recall.test.ts`, `version.test.ts`, `video.test.ts` |
 | `remember/types.ts` | `version.test.ts` |
 | `src/tools.ts` | `tool-contract.test.ts` |
 | `src/version.ts` | `version.test.ts` |
@@ -53,6 +53,7 @@ The following 6 source files are not directly imported by any test file:
 | Test File | Imports from Source |
 |-----------|---------------------|
 | `tests/archival.test.ts` | 1 files |
+| `tests/archive-names.test.ts` | 1 files |
 | `tests/file-indexing.test.ts` | 1 files |
 | `tests/protocol.test.ts` | 0 files |
 | `tests/recall.test.ts` | 1 files |
