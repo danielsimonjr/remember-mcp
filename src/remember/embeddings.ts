@@ -50,6 +50,10 @@ export function embed(text: string): Float32Array {
   return vec;
 }
 
+/**
+ * Dot product of two vectors.
+ * For two unit vectors from `embed`, the dot product is the cosine similarity. The function reads only the shorter length.
+ */
 export function cosine(a: Float32Array, b: Float32Array): number {
   const n = Math.min(a.length, b.length);
   let dot = 0;
@@ -57,10 +61,16 @@ export function cosine(a: Float32Array, b: Float32Array): number {
   return dot;
 }
 
+/**
+ * Wrap a vector in a `Buffer` without a copy, for storage in a SQLite BLOB.
+ */
 export function embeddingToBlob(vec: Float32Array): Buffer {
   return Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength);
 }
 
+/**
+ * Read a stored BLOB as a `Float32Array`. A `Buffer` or an `ArrayBuffer` input is not copied.
+ */
 export function blobToEmbedding(blob: Buffer | Uint8Array | ArrayBuffer): Float32Array {
   if (blob instanceof ArrayBuffer) {
     return new Float32Array(blob);

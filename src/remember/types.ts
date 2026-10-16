@@ -60,6 +60,9 @@ export interface SystemStats {
   archive_file_count: number;
 }
 
+/**
+ * Where one archive is stored: the video file, the JSON sidecar, the creation time and the memory count.
+ */
 export interface ArchiveInfo {
   file: string;
   index: string;
@@ -67,4 +70,7 @@ export interface ArchiveInfo {
   memory_count: number;
 }
 
+/**
+ * Archive records by user key, then by creation timestamp.
+ */
 export type ArchiveIndex = Record<string, Record<string, ArchiveInfo>>;

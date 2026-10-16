@@ -8,7 +8,7 @@ for semantic search). The same QR-video path indexes text and code files.
 
 ## Requirements
 
-- [Bun](https://bun.sh) ≥ 1.1
+- [Bun](https://bun.sh) ≥ 1.4.2
 - `ffmpeg` on `PATH` (QR-frame → MP4 archival)
 
 ## Install
@@ -94,6 +94,25 @@ New File → Chunk → QR Video → Semantic Search
   the JSON sidecar embeddings (fast, FAISS-free).
 - **Startup:** heavy work is deferred to the first `tools/call` so MCP
   `initialize` stays well under Claude Code's startup window.
+
+## Documentation
+
+The `docs/architecture/` directory holds the design documents.
+
+- [OVERVIEW.md](docs/architecture/OVERVIEW.md): what the server does, how the code is laid out, and the key numbers.
+- [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md): the principles and the design decisions.
+- [COMPONENTS.md](docs/architecture/COMPONENTS.md): each module and its public functions.
+- [DATAFLOW.md](docs/architecture/DATAFLOW.md): the path of each operation through the code.
+- [API.md](docs/architecture/API.md): the 13 tools and the library classes.
+- [FILE_INVENTORY.md](docs/architecture/FILE_INVENTORY.md): every source file and its disposition.
+- [TEST_COVERAGE.md](docs/architecture/TEST_COVERAGE.md): which source files the tests import.
+- [DEPENDENCY_GRAPH.md](docs/architecture/DEPENDENCY_GRAPH.md): which module imports which.
+- [unused-analysis.md](docs/architecture/unused-analysis.md): files and exports that nothing uses.
+- [duplicate-symbols.md](docs/architecture/duplicate-symbols.md): names that more than one file defines.
+
+A generator writes the last five documents. To write them again, run
+`repo-tools map . --out=docs/architecture`. To check all ten documents against the code,
+run `repo-tools check . --docs=docs/architecture`.
 
 ## Migration notes (v2.0)
 

@@ -4,6 +4,10 @@
 
 import type { RememberSystem } from "./system.ts";
 
+/**
+ * Timer that runs `RememberSystem.archiveOldMemories` at a fixed interval.
+ * `start` and `stop` control the timer. `runNow` runs one pass at once, but only when `enabled` is true.
+ */
 export class ArchivalScheduler {
   readonly system: RememberSystem;
   interval: number;

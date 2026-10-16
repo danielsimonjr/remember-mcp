@@ -18,6 +18,10 @@ import {
 import { classifySectors } from "./sectors.ts";
 import type { SectorType } from "./types.ts";
 
+/**
+ * A memory that the active store read back, with its JSON columns decoded.
+ * `score` is present only on a query result.
+ */
 export interface ActiveMemoryRow {
   id: string;
   content: string;
@@ -32,6 +36,9 @@ export interface ActiveMemoryRow {
   score?: number;
 }
 
+/**
+ * The fields that `ActiveStore.addMemory` returns for a new memory.
+ */
 export interface AddMemoryResult {
   id: string;
   content: string;
@@ -56,6 +63,11 @@ function decaySalience(salience: number, lastSeenAt: number, now: number): numbe
   return Math.max(0, salience * factor);
 }
 
+/**
+ * Active memory store on `bun:sqlite`.
+ * It stores each memory with a hashed embedding. A query ranks the memories by similarity and by decayed salience.
+ * It also selects the memories that are due for archival.
+ */
 export class ActiveStore {
   readonly dbPath: string;
   readonly db: Database;

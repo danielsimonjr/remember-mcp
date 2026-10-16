@@ -1,42 +1,65 @@
+<!-- repo-map:no-verification -->
+<!-- GENERATED FILE -- do not edit by hand.
+     Regenerate with `repo-tools map`. -->
+
 # Duplicate Symbols
 
-Names exported by two or more `src` files. Derived from `repo_map.py map`'s
-`duplicate-symbols.json`, which groups **by name only** — it does not compare bodies, so
-every entry is a candidate for triage, not a verdict.
+Names that are OWN-DEFINED (not merely re-exported) by >= 2 distinct files across the monorepo, then CLASSIFIED (see `DupEntryTag`) so the actionable subset is clear: `TRUE_DUPLICATE` (real merge targets) vs `DISPATCH_VARIANT` (>=2 `mathTyped(...)` registrations of the same public name — distinct dispatch surfaces, Bucket C delegation candidates, not copy-paste bodies), `ALIAS_DELEGATION` (a `const X = importedY` forward, excluded once <2 real bodies remain), and `ALLOWLISTED` (matches `duplicate-allowlist.json`: hot-path `is*` guards, AssemblyScript mirrors, per-package `VERSION` strings).
 
-**1 duplicate across 12 tracked symbols.**
+> **Note:** This report groups names by OWN definition, not by call graph, then classifies each flagged name (see DupEntryTag): TRUE_DUPLICATE (the actionable merge targets), DISPATCH_VARIANT (>=2 mathTyped(...) registrations of the same public name — distinct dispatch surfaces, Bucket C delegation candidates, not copy-paste bodies), ALIAS_DELEGATION (a const-alias forward to an imported symbol, not an independent body — excluded once fewer than 2 real bodies remain), and ALLOWLISTED (matches duplicate-allowlist.json: hot-path is* guards, AssemblyScript mirrors, per-package VERSION strings). NOT detected: same-file typed-dispatch overload polymorphism for different argument shapes within one registration — a human still triages TRUE_DUPLICATE entries using the defining files + public flags before merging anything.
 
-## `logger` — benign
+## Summary — runtime (function/constant/class)
 
-| Defined in |
-|---|
-| `remember/system.py` |
-| `remember/file_indexer.py` |
+| Category | Count |
+| --- | --: |
+| **TRUE_DUPLICATE** (actionable) | 0 |
+| DISPATCH_VARIANT | 0 |
+| ALIAS_DELEGATION | 0 |
+| ALLOWLISTED | 0 |
+| _Total flagged names_ | 0 |
 
-Both are `logging.getLogger(__name__)`, so they are *different* loggers that happen to
-share a local variable name — `remember.system` and `remember.file_indexer` respectively.
-This is the standard Python idiom, not a collision: nothing imports `logger` across module
-boundaries, and renaming either would make the code less conventional, not more correct.
+## Summary — types (interface/type/enum)
 
-**No action.**
+| Category | Count |
+| --- | --: |
+| **TRUE_DUPLICATE** (actionable) | 0 |
+| DISPATCH_VARIANT | 0 |
+| ALIAS_DELEGATION | 0 |
+| ALLOWLISTED | 0 |
+| _Total flagged names_ | 0 |
 
-## A name the report does not flag, and why
+## Runtime duplicates
 
-`RememberSystem` appears in the export list of **both** `remember/system.py` (where it is
-defined) and `remember/__init__.py` (which re-exports it). That is a deliberate re-export
-so `from remember import RememberSystem` works, and it is the single name in
-`__init__.py`.
+### TRUE_DUPLICATE — actionable merge targets
 
-It does not appear above because the analysis groups own-exported names from `src` files
-and treats the re-export correctly rather than as a second definition — worth stating
-explicitly, since a reader scanning for duplicates would reasonably expect to see it here.
+_None._
 
-## Verification
+### DISPATCH_VARIANT — distinct public typed-dispatch surfaces (Bucket C candidates)
 
-Generated 2026-08-14 by `repo_map.py map`.
-Regenerate: `python repo_map.py map <repo> --out <dir>` · Check: `python repo_map.py check <repo> --docs docs/architecture`
+_None._
 
-| Claim | Value | Source |
-|---|---|---|
-| totalTypeScriptFiles | 18 | dependency-graph.json |
-| totalExports | 31 | dependency-graph.json |
+### ALIAS_DELEGATION — const-alias forwards (not independent bodies)
+
+_None._
+
+### ALLOWLISTED — accepted layering (see duplicate-allowlist.json)
+
+_None._
+
+## Type duplicates (lower priority)
+
+### TRUE_DUPLICATE
+
+_None._
+
+### DISPATCH_VARIANT
+
+_None._
+
+### ALIAS_DELEGATION
+
+_None._
+
+### ALLOWLISTED
+
+_None._

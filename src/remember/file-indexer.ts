@@ -129,6 +129,10 @@ function chunkText(content: string, chunkSize: number, overlap: number): string[
   return chunks;
 }
 
+/**
+ * Options of `FileIndexer`. Each option has a default.
+ * `allowed_roots` replaces the roots from the `REMEMBER_INDEX_ROOTS` variable.
+ */
 export interface FileIndexerOptions {
   index_dir?: string;
   allowed_roots?: string[] | null;
@@ -138,6 +142,10 @@ export interface FileIndexerOptions {
 
 type FileMeta = Record<string, unknown>;
 
+/**
+ * Indexes text and code files as QR-video archives, and searches them.
+ * Every path that it indexes must be inside an allowed root. The class shares no state with `RememberSystem`.
+ */
 export class FileIndexer {
   readonly indexDir: string;
   readonly allowedRoots: string[];

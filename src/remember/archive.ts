@@ -13,11 +13,18 @@ import { spawnSync } from "node:child_process";
 import QRCode from "qrcode";
 import { cosine, embed } from "./embeddings.ts";
 
+/**
+ * One archived text chunk with its embedding.
+ */
 export interface ArchiveChunk {
   text: string;
   embedding: number[];
 }
 
+/**
+ * The JSON sidecar of an archive video.
+ * It holds every chunk with its embedding, so a search does not decode the video.
+ */
 export interface ArchiveSidecar {
   version: 1;
   chunks: ArchiveChunk[];
@@ -25,6 +32,9 @@ export interface ArchiveSidecar {
   total_chunks: number;
 }
 
+/**
+ * The video size, the chunk count and the compression ratio that `encodeChunks` measured.
+ */
 export interface EncodeResult {
   video_size: number;
   chunk_count: number;
@@ -105,6 +115,10 @@ function runFfmpeg(frameDir: string, videoPath: string, frameCount: number): voi
   }
 }
 
+/**
+ * Delete the video, the sidecar and the temporary or older index files of one archive.
+ * The function ignores a file that it cannot delete.
+ */
 export function removeArchiveOutputs(videoPath: string, indexPath: string): void {
   for (const path of [
     videoPath,
@@ -121,6 +135,10 @@ export function removeArchiveOutputs(videoPath: string, indexPath: string): void
   }
 }
 
+/**
+ * Write the chunks as QR frames, pack the frames into an MP4 with `ffmpeg`, and write the JSON sidecar.
+ * The function throws when `chunks` is empty or when `ffmpeg` fails. After a failure, it deletes the outputs.
+ */
 export async function encodeChunks(
   chunks: Iterable<string>,
   videoPath: string,
@@ -150,6 +168,10 @@ export async function encodeChunks(
   }
 }
 
+/**
+ * Read an archive sidecar.
+ * Returns null when the file is missing or is not a valid sidecar.
+ */
 export function loadSidecar(indexPath: string): ArchiveSidecar | null {
   const candidates = [
     indexPath,
@@ -167,12 +189,19 @@ export function loadSidecar(indexPath: string): ArchiveSidecar | null {
   return null;
 }
 
+/**
+ * Count the chunks of a sidecar. Returns 0 when the sidecar cannot be read.
+ */
 export function sidecarChunkCount(indexPath: string): number {
   const data = loadSidecar(indexPath);
   if (!data) return 0;
   return data.total_chunks || data.chunks.length || 0;
 }
 
+/**
+ * Rank the chunks of a sidecar by cosine similarity to `query`.
+ * Returns the best `topK` chunks, or an empty list when the sidecar cannot be read or holds no chunk.
+ */
 export function searchSidecar(
   indexPath: string,
   query: string,

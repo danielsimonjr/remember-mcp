@@ -28,6 +28,9 @@ function stableChunkId(timestamp: string, chunk: string): string {
   return `archive_${timestamp}_${digest}`;
 }
 
+/**
+ * Options of `RememberSystem`. Each option has a default.
+ */
 export interface RememberSystemOptions {
   active_db?: string;
   archive_dir?: string;
@@ -36,6 +39,11 @@ export interface RememberSystemOptions {
   auto_archive_enabled?: boolean;
 }
 
+/**
+ * Hybrid memory manager.
+ * It keeps memories in an `ActiveStore` and moves old, low-salience memories into QR-video archives.
+ * A query searches both stores, unless the caller excludes the archives.
+ */
 export class RememberSystem {
   readonly activeDb: string;
   readonly archiveDir: string;
