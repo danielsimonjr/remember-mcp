@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Two archive passes in the same second no longer share one archive name.** An archive
+  name is `user_<key>_<unix seconds>`. Two passes for one key in one second wrote the same
+  names, so the later pass replaced the files of the earlier archive. When the later pass
+  failed to encode, its cleanup also deleted the earlier archive's files, and the index
+  still pointed at them. `RememberSystem._nextArchiveTimestamp` now picks the first second,
+  from now on, with no index entry and no video or sidecar of that name in the folder. A
+  pass can therefore get a timestamp a few seconds ahead of the clock. The rule covers one
+  `RememberSystem`, because the archive lock lives in that object. Two server processes on
+  one archive folder share no lock. The new test file `tests/archive-names.test.ts` fails
+  on the old code (0 pass, 4 fail) and passes now. One test forces a failed encode by
+  removing `ffmpeg` from the path.
+
 ### Changed
 
 - **Dependabot no longer carries a dead npm entry.** No dependency-update ecosystem

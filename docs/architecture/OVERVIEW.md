@@ -16,14 +16,14 @@ The first four rows come from `repo-tools map`. The scope of each row is the who
 
 | Metric | Value | Scope | Source |
 |---|---|---|---|
-| Source files | 22 | whole repository | `repo-tools map` |
-| Lines of code | 3264 | whole repository | `repo-tools map` |
+| Source files | 23 | whole repository | `repo-tools map` |
+| Lines of code | 3431 | whole repository | `repo-tools map` |
 | Exports | 57 | whole repository | `repo-tools map` |
 | Entry roots | 3 | whole repository | `repo-tools map` |
 | Files in `src/` | 14 | `src/` only | `file-inventory.json`, area `src` |
-| Lines in `src/` | 2715 | `src/` only | `file-inventory.json`, area `src` |
-| Files in `tests/` | 8 | `tests/` only | `file-inventory.json`, area `tests` |
-| Lines in `tests/` | 549 | `tests/` only | `file-inventory.json`, area `tests` |
+| Lines in `src/` | 2733 | `src/` only | `file-inventory.json`, area `src` |
+| Files in `tests/` | 9 | `tests/` only | `file-inventory.json`, area `tests` |
+| Lines in `tests/` | 698 | `tests/` only | `file-inventory.json`, area `tests` |
 | MCP tools | 13 | `src/tools.ts` | direct count of the `TOOLS` array |
 
 The three entry roots are `src/index.ts` (the `bin` entry), `src/server.ts` (the `./server` export) and `src/remember/index.ts` (the `.` export).
@@ -32,7 +32,7 @@ The three entry roots are `src/index.ts` (the `bin` entry), `src/server.ts` (the
 
 ```
 remember-mcp/
-├── src/                        14 files, 2715 lines
+├── src/                        14 files, 2733 lines
 │   ├── index.ts                stdio entry: serves the MCP server, handles SIGINT and SIGTERM
 │   ├── server.ts               builds the MCP server and registers every tool
 │   ├── tools.ts                tool definitions, handlers, and the lazy singletons
@@ -48,7 +48,7 @@ remember-mcp/
 │       ├── scheduler.ts        ArchivalScheduler: timer for archive passes
 │       ├── file-indexer.ts     FileIndexer: file chunking, indexing and search
 │       └── types.ts            shared types and the sector list
-├── tests/                      8 files, 549 lines (7 test files and one stdio helper)
+├── tests/                      9 files, 698 lines (8 test files and one stdio helper)
 ├── docs/architecture/          this documentation set
 ├── README.md
 ├── CHANGELOG.md
@@ -106,8 +106,8 @@ The claims come from `repo-tools map .`, which reads the whole repository. The o
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 22 | repo-tools map (whole repository) |
-| totalLinesOfCode | 3264 | repo-tools map (whole repository) |
+| totalSourceFiles | 23 | repo-tools map (whole repository) |
+| totalLinesOfCode | 3431 | repo-tools map (whole repository) |
 | totalExports | 57 | repo-tools map (whole repository) |
 | entryRoots | 3 | repo-tools map (whole repository) |
 | orphanedFiles | 1 | repo-tools map (whole repository) |
