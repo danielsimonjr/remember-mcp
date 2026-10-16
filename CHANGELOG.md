@@ -32,6 +32,14 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- **CI runs the current Bun release on Windows in a second job.** The `test` job pins Bun
+  1.4.2, the declared floor. It could not show the `EEXIST` failure of a bare database name,
+  which Bun 1.4.3 on Windows causes. The new job `test-current-bun` installs the latest Bun
+  release on Windows and runs `bun test`. It is not a required check, so the required names
+  `test (ubuntu-latest)` and `test (windows-latest)` stay the same, and a new Bun release can
+  turn the new job red without blocking a merge. The job fails when `ensureDir` calls
+  `mkdirSync` for a folder that exists, and it passes with the current code.
+
 - **Dependabot no longer carries a dead npm entry.** No dependency-update ecosystem
   can read a Bun-managed directory: `bun` rejects `lockfileVersion` 2, which Bun 1.4
   writes, and `npm` aborts with "cannot update bun.lock. Set package-ecosystem: bun".
