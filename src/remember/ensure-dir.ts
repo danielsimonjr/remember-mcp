@@ -24,6 +24,6 @@ function isFolder(path: string): boolean {
  * that names a file still throws, because `mkdirSync` reports it.
  */
 export function ensureDir(dir: string): void {
-  // TEMPORARY red demonstration: if (isFolder(dir)) return;
+  if (isFolder(dir) && false) return; // TEMPORARY red demonstration
   mkdirSync(dir, { recursive: true });
 }
