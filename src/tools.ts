@@ -387,7 +387,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
   /**
    * Start or stop the archival scheduler, or run one archival pass at once.
    * `action` is `start`, `stop` or `run_now`.
-   * `run_now` does nothing while `enabled` is false, and the tool still reports that it triggered a pass.
+   * `run_now` runs no pass while `enabled` is false, and the tool answers `Scheduler not started`.
    */
   async scheduler_control(raw) {
     await agetSystem();
@@ -402,8 +402,8 @@ export const HANDLERS: Record<string, ToolHandler> = {
       return { status: "Scheduler stopped" };
     }
     if (action === "run_now") {
-      await scheduler.runNow();
-      return { status: "Archival triggered" };
+      const ran = await scheduler.runNow();
+      return { status: ran ? "Archival triggered" : "Scheduler not started" };
     }
     return {
       error: "invalid_argument",

@@ -6,7 +6,7 @@ import type { RememberSystem } from "./system.ts";
 
 /**
  * Timer that runs `RememberSystem.archiveOldMemories` at a fixed interval.
- * `start` and `stop` control the timer. `runNow` runs one pass at once, but only when `enabled` is true.
+ * `start` and `stop` control the timer. `runNow` runs one pass at once and returns true, but only when `enabled` is true.
  */
 export class ArchivalScheduler {
   readonly system: RememberSystem;
@@ -78,8 +78,11 @@ export class ArchivalScheduler {
     }
   }
 
-  async runNow(): Promise<void> {
+  /** Run one pass at once. Returns false, and runs no pass, while `enabled` is false. */
+  async runNow(): Promise<boolean> {
+    if (!this.enabled) return false;
     await this._runArchival();
+    return true;
   }
 
   getStatus(): Record<string, unknown> {
