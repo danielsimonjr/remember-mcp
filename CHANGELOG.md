@@ -68,7 +68,24 @@ All notable changes to this project will be documented in this file.
   Putting the old call back at any one of the five sites makes at least one test fail. With
   the old call, the CI job on Windows fails and the CI job on Ubuntu passes.
 
+- **TypeScript 7 removed `baseUrl`; the option was dead config here anyway.** `tsc` now errors
+  `TS5102: Option 'baseUrl' has been removed`. This tsconfig declared `baseUrl: "."` with **no
+  `paths` map**, and every import in `src/` is a package specifier resolving through
+  `node_modules`, so nothing depended on it. Deleted rather than replaced with the suggested
+  `"paths": {"*": ["./*"]}` shim, which would have re-created a resolution rule the code never used.
+
+- **Regenerated `bun.lock` for the Dependabot bump.** Dependabot's npm ecosystem edits
+  `package.json` only and leaves `bun.lock` untouched, so CI failed with
+  `error: lockfile had changes, but lockfile is frozen` on both runners. This is structural for
+  every Dependabot PR against a Bun repo, not specific to this bump.
+
 ### Changed
+
+- **The changelog has one `## [Unreleased]` heading.** A second block of that name sat between
+  the entries for 2.0.0 and 1.3.0. It held two Fixed entries: the removal of `baseUrl` for
+  TypeScript 7 and the regenerated `bun.lock` for the Dependabot bump. Both describe changes
+  that came after the 2.0.0 commit, so they now stand in the first block. Their text is the
+  same as before.
 
 - **Dependabot no longer carries a dead npm entry.** No dependency-update ecosystem
   can read a Bun-managed directory: `bun` rejects `lockfileVersion` 2, which Bun 1.4
@@ -132,21 +149,6 @@ All notable changes to this project will be documented in this file.
   still described FastMCP 4 as prerelease.
 - Verified against PyPI before changing anything: `fastmcp-slim 4.0.0` exists and is exactly
   what `fastmcp 4.0.0` declares. `uv lock` then resolves; 36 tests pass locally.
-
-## [Unreleased]
-
-### Fixed
-
-- **TypeScript 7 removed `baseUrl`; the option was dead config here anyway.** `tsc` now errors
-  `TS5102: Option 'baseUrl' has been removed`. This tsconfig declared `baseUrl: "."` with **no
-  `paths` map**, and every import in `src/` is a package specifier resolving through
-  `node_modules`, so nothing depended on it. Deleted rather than replaced with the suggested
-  `"paths": {"*": ["./*"]}` shim, which would have re-created a resolution rule the code never used.
-- **Regenerated `bun.lock` for the Dependabot bump.** Dependabot's npm ecosystem edits
-  `package.json` only and leaves `bun.lock` untouched, so CI failed with
-  `error: lockfile had changes, but lockfile is frozen` on both runners. This is structural for
-  every Dependabot PR against a Bun repo, not specific to this bump.
-
 
 ## [1.3.0] - 2026-08-30
 
