@@ -250,12 +250,13 @@ The tests run with `bun test`. The type check runs with `bun run typecheck`. Bot
 | `scheduler.test.ts` | `runNow` returns false and runs no pass while `enabled` is false, and returns true after a pass otherwise. A timer pass does nothing while `enabled` is false. A started server answers `run_now` with `Scheduler not started` before `start` and with `Archival triggered` after it. |
 | `video.test.ts` | Encoding and searching a sidecar round-trip. A query reaches archived memories. An archive pass takes a memory of more than 800 CJK characters. A QR frame holds at most 800 UTF-8 bytes, and a cut falls between two code points, so a cut never splits a surrogate pair. |
 | `file-indexing.test.ts` | A text file is indexed and found by search. A path outside the allowed roots is refused. A hit of a code file carries `line_info`, which is the header of its chunk. A text chunk that starts with a link reference has no `line_info`, and a file indexed without line chunks has none. A file that is not valid UTF-8 is refused and nothing is recorded, and a directory run lists the refused file in `errors`. A call of `index_file` over MCP answers `permission_denied` for such a file. The indexer refuses an empty text, code, PDF or EPUB file, and the message names the file. An index that holds the hash of an empty file still gives the refusal. The call over MCP answers `invalid_argument`. A CJK file is indexed at the default `chunk_size`. The text chunker never cuts inside a surrogate pair: a code point across a chunk boundary stays whole. The chunks of an astral text leave no gap, and each one ends after the one before it. |
+| `mcp-stdio.test.ts` | The helper `sendJsonRpc` returns the reply with the id of its request. It skips a notification, a request from the server, a blank line and a reply to an earlier request. It keeps lines that arrive together for the next request, and it joins a line, or a character, that arrives in two chunks. It returns null at the deadline, at the end of the stream and for a last line with no line break. A reply that arrives after the deadline is not lost. A message with no id, and a second request while one waits, throw. A scripted server drives the tests, so no process runs. |
 | `protocol.test.ts` | The server starts on stdio, negotiates a protocol version, lists the expected tools, and answers `initialize` within the budget. |
 | `tool-contract.test.ts` | The registered tools are exactly the expected 13, and every tool has a description. |
 | `tool-handlers.test.ts` | A started server answers 11 of the 13 tools with the documented fields: `add_memory`, `query_memory`, `archive_memories`, `recall_memory`, `get_stats`, `index_file`, `index_directory`, `search_files`, `list_indexed_files`, `get_file_info` and `get_file_stats`. A query is scoped by `user_id`, and it reaches the archives unless `include_archive` is false. A recall needs an archive of the same user. A file outside `REMEMBER_INDEX_ROOTS`, a missing file and a dotfile each get their own error object. An unknown tool is a JSON-RPC error with code -32602. An argument that breaks the input schema is refused with `isError` and a text message. |
 | `version.test.ts` | The exported version equals the version in `package.json`. |
 
-`tests/mcp-stdio.ts` is a helper that starts the server and exchanges JSON-RPC messages. Its function `openToolSession` also finishes the handshake and returns a `call` that sends one `tools/call` and parses the JSON of the result.
+`tests/mcp-stdio.ts` is a helper that starts the server and exchanges JSON-RPC messages. Its function `openToolSession` also finishes the handshake and returns a `call` that sends one `tools/call` and parses the JSON of the result. Its function `sendJsonRpc` sends one request and returns the reply with the same id. One line reader serves a whole server session, so a line that is not the reply is skipped and no byte is lost.
 
 Gaps that a reader must know:
 
@@ -274,7 +275,7 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 28 | repo-tools map (whole repository) |
-| totalLinesOfCode | 5142 | repo-tools map (whole repository) |
+| totalSourceFiles | 29 | repo-tools map (whole repository) |
+| totalLinesOfCode | 5346 | repo-tools map (whole repository) |
 | runtimeCircularDeps | 0 | repo-tools map (whole repository) |
 | typeOnlyCircularDeps | 0 | repo-tools map (whole repository) |

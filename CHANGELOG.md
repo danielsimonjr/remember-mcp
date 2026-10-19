@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **The test helper `sendJsonRpc` returns the reply to its own request.** The helper read the first line
+  that the server wrote, whatever its id, and dropped every other line in its buffer. One notification, or
+  one late reply, moved every later answer of a shared session by one request. It checked its limit only
+  between reads, so a silent server blocked it forever. One line reader now serves a whole server session.
+  The helper skips each line that is not the reply with the same id, keeps unread lines for the next
+  request, and stops a read at the limit without losing its bytes. The limit is 100 s, under the 120 s
+  that a slow test may run, and a caller can give another limit. A message with no id, and a second
+  request while one waits on the same server, throw before anything is written. The new file
+  `tests/mcp-stdio.test.ts` has 13 tests on a scripted server. Seven of them fail on the old helper and
+  one hangs it. Nine mutations of the helper each fail at least one test.
+
 - **`index_file` refuses an empty file of any type and names the cause.** The text chunker
   returned one empty chunk for an empty text, so the QR library threw `No input text`, and the
   call answered `invalid_argument` with that message. The code chunker returned one header chunk

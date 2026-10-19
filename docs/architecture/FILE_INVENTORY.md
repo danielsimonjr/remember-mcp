@@ -8,7 +8,7 @@ This report lists each source file that the map census finds, with a disposition
 
 **Language**: typescript
 
-**Total files**: 28
+**Total files**: 29
 
 ## Disposition counts
 
@@ -18,25 +18,25 @@ This report lists each source file that the map census finds, with a disposition
 | `build-entry` | 3 | A `src`-area file that is an entry root. |
 | `test-only` | 0 | A `src`-area file that only a test reaches. |
 | `orphan` | 1 | A `src`-area file that nothing reaches. Delete it, or wire it to a root. |
-| `test` | 13 | A file in a `tests/` folder, or a `*.test.ts` or `*.spec.ts` file. |
+| `test` | 14 | A file in a `tests/` folder, or a `*.test.ts` or `*.spec.ts` file. |
 | `tool` | 0 | A file in a `tools/` or `scripts/` folder outside `src/`. |
 | `config` | 0 | A `*.config.*` file of TypeScript or JavaScript. |
 | `example` | 0 | A file in `examples/` or `docs/`. |
 | `bench` | 0 | A file in `bench/` or `benchmarks/`, or a `*.bench.*` file. |
-| **Total** | **28** | |
+| **Total** | **29** | |
 
 ## Per-area counts
 
 | Area | Files |
 | --- | --: |
 | `src` | 15 |
-| `tests` | 13 |
+| `tests` | 14 |
 
 ## Per-package counts
 
 | Package | Files |
 | --- | --: |
-| `(root)` | 13 |
+| `(root)` | 14 |
 | `remember-mcp` | 15 |
 
 ## All files
@@ -63,7 +63,8 @@ This report lists each source file that the map census finds, with a disposition
 | `tests/bare-paths.test.ts` | (root) | tests | test | 155 |
 | `tests/ensure-dir.test.ts` | (root) | tests | test | 51 |
 | `tests/file-indexing.test.ts` | (root) | tests | test | 558 |
-| `tests/mcp-stdio.ts` | (root) | tests | test | 141 |
+| `tests/mcp-stdio.test.ts` | (root) | tests | test | 141 |
+| `tests/mcp-stdio.ts` | (root) | tests | test | 204 |
 | `tests/protocol.test.ts` | (root) | tests | test | 104 |
 | `tests/recall.test.ts` | (root) | tests | test | 85 |
 | `tests/scheduler.test.ts` | (root) | tests | test | 181 |

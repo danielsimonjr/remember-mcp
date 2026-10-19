@@ -454,4 +454,4 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 | Claim | Value | Source |
 |---|---|---|
 | totalExports | 61 | repo-tools map (whole repository) |
-| totalSourceFiles | 28 | repo-tools map (whole repository) |
+| totalSourceFiles | 29 | repo-tools map (whole repository) |

@@ -9,7 +9,7 @@
 | Metric | Count |
 |--------|-------|
 | Total Source Files | 15 |
-| Total Test Files | 12 |
+| Total Test Files | 13 |
 | Source Files with Tests | 9 |
 | Source Files without Tests | 6 |
 | Coverage (raw, direct-import) | **60.0%** |
@@ -58,6 +58,7 @@ The following 6 source files are not directly imported by any test file:
 | `tests/bare-paths.test.ts` | 0 files |
 | `tests/ensure-dir.test.ts` | 1 files |
 | `tests/file-indexing.test.ts` | 2 files |
+| `tests/mcp-stdio.test.ts` | 0 files |
 | `tests/protocol.test.ts` | 0 files |
 | `tests/recall.test.ts` | 1 files |
 | `tests/scheduler.test.ts` | 2 files |
