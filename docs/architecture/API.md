@@ -192,13 +192,13 @@ Errors:
 |---|---|
 | `permission_denied` | A path outside the allowed roots, a dotfile (unless `index_dotfiles` is true), a file larger than 32 MiB, a file with a zero byte in its first 8192 bytes, or a file that is not valid UTF-8. |
 | `not_found` | The path is not a file. |
-| `invalid_argument` | A bad chunk setting, a PDF or EPUB file, an empty file that the indexer splits into windows, or any other error that the indexer raises. |
+| `invalid_argument` | A bad chunk setting, a PDF or EPUB file, an empty file, or any other error that the indexer raises. |
 
 Chunking rules:
 
 - A file of type `python`, `javascript`, `typescript`, `java`, `cpp` or `c` is split by lines when `preserve_lines` is true. Each chunk holds `chunk_size` divided by 50 lines (at least 1) and starts with the header `[name:first-last]`. These chunks do not overlap.
 - Any other file is split into windows of `chunk_size` UTF-16 units. Each window starts `overlap` units before the end of the last window. A window starts at least one unit after the last start. A cut never splits a surrogate pair, so a code point stays whole. The indexer drops a window that ends where the last window ended, because that window adds no text.
-- An empty file that the indexer splits into windows gives no chunk. The indexer refuses such a file with the message `No indexable content in <path>`.
+- The indexer refuses an empty file of any type with the message `No indexable content in <path>`. The refusal comes before the lookup of the content hash.
 - The type comes from the file extension. An extension that is not in the map gives the type `unknown`, and the indexer treats the file as text.
 
 ### index_directory
@@ -374,7 +374,7 @@ Defaults: `index_dir` is `file_index/` (the MCP server uses this value), `max_fi
 
 The indexer stores one video and one sidecar for each file, named with the content hash. The file `file_metadata.json` in the index folder records the files. A metadata file that cannot be parsed is renamed with the suffix `.corrupt`, and the index starts empty.
 
-Errors: the methods throw an `Error`. The `name` is `PermissionError`, `FileNotFoundError` or `ValueError` for the causes in the table of `index_file`. A bad chunk setting and a file with no chunk throw a plain `Error`. The `close` method does nothing.
+Errors: the methods throw an `Error`. The `name` is `PermissionError`, `FileNotFoundError` or `ValueError` for the causes in the table of `index_file`. A bad chunk setting and an empty file throw a plain `Error`. The `close` method does nothing.
 
 ## Library: ArchivalScheduler
 
