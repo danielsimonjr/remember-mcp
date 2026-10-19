@@ -38,9 +38,17 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      # choco exits 0 when it cannot reach its feed, and the job then fails later with a
+      # test error that does not name the cause. The step checks that ffmpeg runs, and tries again.
       - name: Install ffmpeg (Windows)
         if: runner.os == 'Windows'
-        run: choco install ffmpeg -y
+        run: |
+          for attempt in 1 2 3; do
+            if choco install ffmpeg -y && ffmpeg -version; then exit 0; fi
+            echo "ffmpeg is not usable after attempt $attempt" >&2
+            sleep 20
+          done
+          exit 1
 
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
