@@ -13,8 +13,8 @@ All notable changes to this project will be documented in this file.
   words without a space (Han, Hiragana, Katakana, Thai, Lao, Khmer, Myanmar) gives overlapping pairs of
   characters, or the one character of a run of one. A lone letter of any script is noise, as it is in ASCII.
   Text goes to Unicode form NFC first, so a letter with a separate accent mark and the joined letter give one
-  vector. The vector of an ASCII text is byte for byte the vector it was; ten texts pin that with a hash of
-  the bytes. The count of a token is now one pass over a map and no longer a scan for each token, so a text of
+  vector. The vector of an ASCII text is byte for byte the vector it was; ten texts pin that against a copy
+  of the first version of `embed`. The count of a token is now one pass over a map and no longer a scan for each token, so a text of
   100 000 characters costs a linear number of steps. Vectors that a store already holds are not rewritten.
   The new `currentVector` embeds the text again for a stored vector with 1 in the first slot and 0 in the
   others, in the active store and in the archive search, so an existing memory in these scripts is still found

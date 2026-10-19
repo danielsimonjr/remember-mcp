@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,21 +10,48 @@ import { RememberSystem } from "../src/remember/system.ts";
 const nonZero = (vec: Float32Array) => vec.filter((x) => x !== 0).length;
 const norm = (vec: Float32Array) => Math.sqrt(vec.reduce((sum, x) => sum + x * x, 0));
 const sim = (a: string, b: string) => cosine(embed(a), embed(b));
-const digest = (vec: Float32Array) =>
-  createHash("sha256").update(Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength)).digest("hex").slice(0, 16);
 
-// The vector of each text, as the first version of embed() made it: the first 16 hex digits of the sha256 of its bytes.
-const FIRST_VERSION: Array<[string, string]> = [
-  ["hello world", "8b76d9ae5a501e8d"],
-  ["Deploy key rotation runbook, step_1 of 12", "1ff9e95aaeec7132"],
-  ["alpha alpha beta", "3bc526a34d88d1f3"],
-  ["x y z a1 b_2 __init__ 007 0x1F", "d29866f2524f56c8"],
-  ["The quick brown fox jumps over the lazy dog. The DOG barks; the fox runs away!", "23d66420f62ab5ab"],
-  ["", "373421642a44f741"],
-  ["a b c", "373421642a44f741"],
-  ["token ".repeat(500) + "other", "b607abe8c6a6db4e"],
-  ["UPPER lower MiXeD CaSe words", "4c2b9d3f3ba7f491"],
-  ["foo-bar_baz.qux/quux:corge=grault", "b9f48acb15b61e73"],
+// The first version of embed(), kept as the reference for ASCII text. The same runtime runs it and the new embed(), so the
+// comparison does not depend on how a platform rounds Math.log.
+function firstVersionEmbed(text: string): Float32Array {
+  const hash = (token: string, seed: number): number => {
+    let h = seed ^ token.length;
+    for (let i = 0; i < token.length; i++) {
+      h = Math.imul(h ^ token.charCodeAt(i), 0x5bd1e995);
+      h = (h << 13) | (h >>> 19);
+    }
+    h = Math.imul(h ^ (h >>> 15), 0x1b873593);
+    return h >>> 0;
+  };
+  const vec = new Float32Array(384);
+  const tokens = (text.toLowerCase().match(/[a-z0-9_]+/gi) ?? []).filter((x) => x.length > 1);
+  if (tokens.length === 0) {
+    vec[0] = 1;
+    return vec;
+  }
+  for (const token of tokens) {
+    const idx = hash(token, 0x9747b28c) % 384;
+    const sign = (hash(token, 0x85ebca6b) & 1) === 0 ? 1 : -1;
+    vec[idx] += sign * (1 + Math.log(1 + tokens.filter((x) => x === token).length));
+  }
+  let norm = 0;
+  for (let i = 0; i < 384; i++) norm += vec[i] * vec[i];
+  norm = Math.sqrt(norm) || 1;
+  for (let i = 0; i < 384; i++) vec[i] /= norm;
+  return vec;
+}
+
+const ASCII_CORPUS = [
+  "hello world",
+  "Deploy key rotation runbook, step_1 of 12",
+  "alpha alpha beta",
+  "x y z a1 b_2 __init__ 007 0x1F",
+  "The quick brown fox jumps over the lazy dog. The DOG barks; the fox runs away!",
+  "",
+  "a b c",
+  "token ".repeat(500) + "other",
+  "UPPER lower MiXeD CaSe words",
+  "foo-bar_baz.qux/quux:corge=grault",
 ];
 
 describe("embed", () => {
@@ -46,9 +72,11 @@ describe("embed", () => {
     expect(repeated[295]).toBeCloseTo(-0.374105, 5);
   });
 
-  test("ASCII text gives the same bytes as the first version, for a spread of texts", () => {
-    for (const [text, expected] of FIRST_VERSION) {
-      expect(digest(embed(text))).toBe(expected);
+  test("ASCII text gives the same bytes as the first version of embed(), for a spread of texts", () => {
+    for (const text of ASCII_CORPUS) {
+      const now = embed(text);
+      const first = firstVersionEmbed(text);
+      expect(Buffer.from(now.buffer, now.byteOffset, now.byteLength).equals(Buffer.from(first.buffer))).toBe(true);
     }
   });
 
