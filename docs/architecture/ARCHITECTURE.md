@@ -82,7 +82,7 @@ Edges that the design forbids:
 
 **Alternative that the design does not use.** A neural embedding model with a vector index. The comment in `embeddings.ts` names `sentence-transformers` and FAISS.
 
-**Trade-offs.** The vectors capture shared tokens. They do not capture meaning. Two texts without a shared token have a similarity near 0. Text with no token of two or more ASCII letters, digits or underscores has the same vector as all other such text.
+**Trade-offs.** The vectors capture shared tokens. They do not capture meaning. Two texts without a shared token have a similarity near 0. A token is a word of two or more characters. A script that writes words without a space gives pairs of neighbouring characters. A Chinese or Thai text then ranks by shared pairs. A text with no token at all, for example a text of single letters and symbols, has the same vector as all other such text.
 
 ### QR video archives with a JSON sidecar
 
@@ -245,6 +245,7 @@ The tests run with `bun test`. The type check runs with `bun run typecheck`. Bot
 | `archival.test.ts` | An archive pass moves only low-salience memories and keeps the totals. The default owner archives under `default`. An empty pass does nothing. `age_days` 0 is a real value. |
 | `archive-names.test.ts` | Two archive passes in the same second keep both archives. A pass skips a name that a file on disk holds. A failed encode in the same second keeps the earlier archive. A restart rebuilds the index of both archives. |
 | `bare-paths.test.ts` | Each module that creates a folder accepts a bare file name, `.` and `./`. A child process with an empty working directory runs each case. A started server answers `get_stats` with the default paths. |
+| `embeddings.test.ts` | ASCII text keeps the exact bytes of its vector. Two different Chinese, Japanese, Thai, Russian, Greek and Korean texts give different vectors, and texts that share words rank closer. A lone letter of any script is no token, and a letter with a separate accent mark gives the vector of the joined letter. A text of 100 000 characters embeds in linear time. A stored vector with 1 in the first slot is made again from its text, in the active store and in the archive search, and a stored vector with other slots set is kept. |
 | `ensure-dir.test.ts` | `ensureDir` creates nested folders, accepts a folder that exists, accepts `.`, `..` and `./`, and throws for a path that names a file. |
 | `recall.test.ts` | An archived memory can be recalled. A recall from an unknown archive leaves active storage unchanged. |
 | `scheduler.test.ts` | `runNow` returns false and runs no pass while `enabled` is false, and returns true after a pass otherwise. A timer pass does nothing while `enabled` is false. A started server answers `run_now` with `Scheduler not started` before `start` and with `Archival triggered` after it. |
@@ -275,7 +276,7 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 29 | repo-tools map (whole repository) |
-| totalLinesOfCode | 5346 | repo-tools map (whole repository) |
+| totalSourceFiles | 30 | repo-tools map (whole repository) |
+| totalLinesOfCode | 5667 | repo-tools map (whole repository) |
 | runtimeCircularDeps | 0 | repo-tools map (whole repository) |
 | typeOnlyCircularDeps | 0 | repo-tools map (whole repository) |

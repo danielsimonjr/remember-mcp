@@ -174,7 +174,7 @@ Behavior notes:
 - **Database path.** The constructor creates the parent folder of the database file with `ensureDir`. The path `:memory:` skips that step. A bare file name has `.` as its parent folder, and `ensureDir` accepts that folder.
 - **Initial salience.** A new memory has salience 0.85. The value is below 1.0 on purpose. A `min_salience` of 1.0 then selects fresh memories, because the rule is that salience is below the minimum.
 - **Decay.** Salience halves every 30 days since `last_seen_at`. The code computes the decay when it reads a row. The stored value does not change until a query reinforces the row.
-- **Ranking.** A score is `0.85 × similarity + 0.15 × decayed salience`. The query reads every row of the owner and computes the score in memory. The cost grows in a straight line with the number of memories.
+- **Ranking.** A score is `0.85 × similarity + 0.15 × decayed salience`. The similarity uses `currentVector` on the stored vector of the row. The query reads every row of the owner and computes the score in memory. The cost grows in a straight line with the number of memories.
 - **Owner filter.** A false `user_id`, including an empty string, selects the rows of every owner.
 - **Reinforcement.** For each returned row, the query sets `last_seen_at` to now and adds 0.05 to the stored salience, with a maximum of 1.0. The update runs in one transaction.
 - **Eligibility.** `selectEligible` keeps rows with `created_at` at or before the threshold and a decayed salience below the minimum. The method sorts the rows by salience, lowest first, and then by age.
@@ -221,7 +221,7 @@ Behavior notes:
 - **Encode errors.** `ffmpeg` that is missing from `PATH` or that exits with an error throws an `Error` with the text `ffmpeg encode failed`. After any error, the function removes the outputs and throws again.
 - **Compression ratio.** The ratio is the UTF-8 size of the chunks divided by the video size. The value is 1 when the video size is 0.
 - **Cleanup.** `removeArchiveOutputs` also removes the `.tmp` file of the sidecar, and any `.json` and `.faiss` file with the video name. The function ignores a deletion that fails.
-- **Search.** `searchSidecar` embeds the query, scores every chunk with `cosine`, sorts the scores, and returns the first `topK`. A search never opens the video.
+- **Search.** `searchSidecar` embeds the query, scores every chunk with `cosine` on `currentVector` of the stored embedding, sorts the scores, and returns the first `topK`. A search never opens the video.
 
 ### src/remember/embeddings.ts
 
@@ -230,16 +230,20 @@ export function embed(text: string): Float32Array;
 export function cosine(a: Float32Array, b: Float32Array): number;
 export function embeddingToBlob(vec: Float32Array): Buffer;
 export function blobToEmbedding(blob: Buffer | Uint8Array | ArrayBuffer): Float32Array;
+export function currentVector(stored: Float32Array, text: string): Float32Array;
 export { EMBED_DIM };  // 384
 ```
 
 Behavior notes:
 
-- **Method.** `embed` lowercases the text and takes the tokens that match `[a-z0-9_]+` and have two or more characters. Each token adds a signed weight to one of 384 slots. One hash function with two seeds chooses the slot and the sign. The weight is `1 + ln(1 + count of the token)`. The function then scales the vector to unit length.
-- **No tokens.** Text with no usable token gives the vector with 1 in the first slot.
-- **Language.** The tokenizer keeps ASCII letters, digits and underscores. Other characters separate tokens. Text with no ASCII token of two or more characters gets the no-token vector. Any two such texts, for example two Chinese sentences, score 1 against each other.
+- **Method.** `embed` lowercases the text and finds its tokens. Each token adds a signed weight to one of 384 slots. One hash function with two seeds chooses the slot and the sign. The weight is `1 + ln(1 + count of the token)`. The function then scales the vector to unit length.
+- **Tokens.** A token is one of three things. (1) A run of ASCII letters, digits and underscores of two or more characters. (2) A run of two or more letters, marks, digits and underscores that holds a non-ASCII character, for example a Russian or Korean word. (3) A pair of neighbouring characters of a script that writes words without a space (Han, Hiragana, Katakana, Thai, Lao, Khmer and Myanmar). A run of one character of such a script is one token. A lone letter of any other script is not a token, as a lone ASCII letter is not. Regular expressions find the tokens, and not `Intl.Segmenter`, so every platform gives the same vector.
+- **Unicode form.** For a text that holds a non-ASCII character, the function converts the lowercase text to form NFC first. A letter with a separate accent mark and the same letter with the accent in one code point then give one vector. An ASCII text takes the ASCII path only.
+- **No tokens.** Text with no token gives the vector with 1 in the first slot.
+- **Language.** Two different Chinese sentences give different vectors, and sentences that share words have a higher similarity than sentences that share none. A pair of characters is a coarse unit and not a word. A query of one character of an unspaced script matches only a text that holds that character as a run of one.
 - **Similarity.** `cosine` is a plain dot product of the shorter length. For two outputs of `embed`, the dot product is the cosine similarity.
-- **Cost.** The function counts a token again for every slot update, so a long text costs a quadratic number of comparisons in its token count.
+- **Stored vectors.** `currentVector` gives the vector to rank a stored text by. The no-token vector has 1 in the first slot and 0 in every other slot. A store that an earlier tokenizer filled holds this vector for a text of non-ASCII words. For a stored vector of that form, the function embeds the text again. Any other stored vector is returned as it is. The active store and the archive search both rank through `currentVector`, and neither writes the new vector back.
+- **Cost.** The function counts the tokens once, in a map, so the cost grows in a straight line with the length of the text.
 - **Storage.** `embeddingToBlob` shares the memory of the vector. `blobToEmbedding` shares the memory of a `Buffer` or `ArrayBuffer`. A `Uint8Array` input is copied.
 
 ### src/remember/sectors.ts
@@ -371,6 +375,6 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 29 | repo-tools map (whole repository) |
-| totalExports | 61 | repo-tools map (whole repository) |
+| totalSourceFiles | 30 | repo-tools map (whole repository) |
+| totalExports | 62 | repo-tools map (whole repository) |
 | runtimeCircularDeps | 0 | repo-tools map (whole repository) |

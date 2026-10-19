@@ -6,6 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **`embed()` gives a text in a script other than ASCII a vector of its own.** The tokenizer kept only ASCII
+  words of two characters or more. Every other text got one vector (1 in the first slot), so a query in
+  Chinese, Japanese, Thai, Russian, Greek or Korean ranked all memories in that script equal, and the cosine
+  of two different Chinese sentences was 1. A word of another script is now a token. A script that writes
+  words without a space (Han, Hiragana, Katakana, Thai, Lao, Khmer, Myanmar) gives overlapping pairs of
+  characters, or the one character of a run of one. A lone letter of any script is noise, as it is in ASCII.
+  Text goes to Unicode form NFC first, so a letter with a separate accent mark and the joined letter give one
+  vector. The vector of an ASCII text is byte for byte the vector it was; ten texts pin that with a hash of
+  the bytes. The count of a token is now one pass over a map and no longer a scan for each token, so a text of
+  100 000 characters costs a linear number of steps. Vectors that a store already holds are not rewritten.
+  The new `currentVector` embeds the text again for a stored vector with 1 in the first slot and 0 in the
+  others, in the active store and in the archive search, so an existing memory in these scripts is still found
+  after the change. A query of one character of an unspaced script matches only a text that holds that
+  character as a run of one. The new file `tests/embeddings.test.ts` has 27 tests, and 19 of them fail
+  against the old tokenizer.
+
 - **The test helper `sendJsonRpc` returns the reply to its own request.** The helper read the first line
   that the server wrote, whatever its id, and dropped every other line in its buffer. One notification, or
   one late reply, moved every later answer of a shared session by one request. It checked its limit only

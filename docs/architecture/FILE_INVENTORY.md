@@ -8,7 +8,7 @@ This report lists each source file that the map census finds, with a disposition
 
 **Language**: typescript
 
-**Total files**: 29
+**Total files**: 30
 
 ## Disposition counts
 
@@ -18,25 +18,25 @@ This report lists each source file that the map census finds, with a disposition
 | `build-entry` | 3 | A `src`-area file that is an entry root. |
 | `test-only` | 0 | A `src`-area file that only a test reaches. |
 | `orphan` | 1 | A `src`-area file that nothing reaches. Delete it, or wire it to a root. |
-| `test` | 14 | A file in a `tests/` folder, or a `*.test.ts` or `*.spec.ts` file. |
+| `test` | 15 | A file in a `tests/` folder, or a `*.test.ts` or `*.spec.ts` file. |
 | `tool` | 0 | A file in a `tools/` or `scripts/` folder outside `src/`. |
 | `config` | 0 | A `*.config.*` file of TypeScript or JavaScript. |
 | `example` | 0 | A file in `examples/` or `docs/`. |
 | `bench` | 0 | A file in `bench/` or `benchmarks/`, or a `*.bench.*` file. |
-| **Total** | **29** | |
+| **Total** | **30** | |
 
 ## Per-area counts
 
 | Area | Files |
 | --- | --: |
 | `src` | 15 |
-| `tests` | 14 |
+| `tests` | 15 |
 
 ## Per-package counts
 
 | Package | Files |
 | --- | --: |
-| `(root)` | 14 |
+| `(root)` | 15 |
 | `remember-mcp` | 15 |
 
 ## All files
@@ -45,9 +45,9 @@ This report lists each source file that the map census finds, with a disposition
 | --- | --- | --- | --- | --: |
 | `src/example.ts` | remember-mcp | src | orphan | 97 |
 | `src/index.ts` | remember-mcp | src | build-entry | 38 |
-| `src/remember/active-store.ts` | remember-mcp | src | reachable | 301 |
+| `src/remember/active-store.ts` | remember-mcp | src | reachable | 303 |
 | `src/remember/archive.ts` | remember-mcp | src | reachable | 233 |
-| `src/remember/embeddings.ts` | remember-mcp | src | reachable | 82 |
+| `src/remember/embeddings.ts` | remember-mcp | src | reachable | 139 |
 | `src/remember/ensure-dir.ts` | remember-mcp | src | reachable | 29 |
 | `src/remember/file-indexer.ts` | remember-mcp | src | reachable | 645 |
 | `src/remember/index.ts` | remember-mcp | src | build-entry | 11 |
@@ -61,6 +61,7 @@ This report lists each source file that the map census finds, with a disposition
 | `tests/archival.test.ts` | (root) | tests | test | 95 |
 | `tests/archive-names.test.ts` | (root) | tests | test | 149 |
 | `tests/bare-paths.test.ts` | (root) | tests | test | 155 |
+| `tests/embeddings.test.ts` | (root) | tests | test | 262 |
 | `tests/ensure-dir.test.ts` | (root) | tests | test | 51 |
 | `tests/file-indexing.test.ts` | (root) | tests | test | 558 |
 | `tests/mcp-stdio.test.ts` | (root) | tests | test | 141 |

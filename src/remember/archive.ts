@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import QRCode from "qrcode";
-import { cosine, embed } from "./embeddings.ts";
+import { cosine, currentVector, embed } from "./embeddings.ts";
 import { ensureDir } from "./ensure-dir.ts";
 
 /**
@@ -225,7 +225,7 @@ export function searchSidecar(
   if (!data || data.chunks.length === 0) return [];
   const q = embed(query);
   const scored = data.chunks.map((chunk) => {
-    const emb = Float32Array.from(chunk.embedding);
+    const emb = currentVector(Float32Array.from(chunk.embedding), chunk.text);
     return { text: chunk.text, score: cosine(q, emb) };
   });
   scored.sort((a, b) => b.score - a.score);
