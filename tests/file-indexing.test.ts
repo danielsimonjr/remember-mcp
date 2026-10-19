@@ -26,6 +26,15 @@ describe("file indexing", () => {
     return d;
   }
 
+  // A temp root that holds `docs`, the only allowed root, and `index`, where the indexer keeps its index.
+  function setup() {
+    const root = tmp();
+    const docs = join(root, "docs");
+    mkdirSync(docs, { recursive: true });
+    const indexer = new FileIndexer({ index_dir: join(root, "index"), allowed_roots: [docs] });
+    return { docs, indexer };
+  }
+
   test("indexes a text file and finds it by search", async () => {
     const root = tmp();
     const indexDir = join(root, "index");
@@ -234,17 +243,6 @@ describe("file indexing", () => {
       return filePath;
     }
 
-    function setup() {
-      const root = tmp();
-      const docs = join(root, "docs");
-      mkdirSync(docs, { recursive: true });
-      const indexer = new FileIndexer({
-        index_dir: join(root, "index"),
-        allowed_roots: [docs],
-      });
-      return { docs, indexer };
-    }
-
     test("a code chunk carries the line range of its header", async () => {
       const { docs, indexer } = setup();
       await indexer.indexFile({ file_path: writeCodeFile(docs) });
@@ -287,17 +285,6 @@ describe("file indexing", () => {
   });
 
   describe("a file that is not valid UTF-8", () => {
-    function setup() {
-      const root = tmp();
-      const docs = join(root, "docs");
-      mkdirSync(docs, { recursive: true });
-      const indexer = new FileIndexer({
-        index_dir: join(root, "index"),
-        allowed_roots: [docs],
-      });
-      return { docs, indexer };
-    }
-
     async function refusal(indexer: FileIndexer, filePath: string): Promise<Error | undefined> {
       try {
         await indexer.indexFile({ file_path: filePath });
@@ -380,14 +367,6 @@ describe("file indexing", () => {
   });
 
   describe("a file with no text", () => {
-    function setup() {
-      const root = tmp();
-      const docs = join(root, "docs");
-      mkdirSync(docs, { recursive: true });
-      const indexer = new FileIndexer({ index_dir: join(root, "index"), allowed_roots: [docs] });
-      return { docs, indexer };
-    }
-
     test("an empty file is refused with a message that names the file, and nothing is recorded", async () => {
       const { docs, indexer } = setup();
       const filePath = join(docs, "empty.txt");

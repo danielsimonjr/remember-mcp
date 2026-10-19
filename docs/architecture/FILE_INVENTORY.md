@@ -62,7 +62,7 @@ This report lists each source file that the map census finds, with a disposition
 | `tests/archive-names.test.ts` | (root) | tests | test | 149 |
 | `tests/bare-paths.test.ts` | (root) | tests | test | 155 |
 | `tests/ensure-dir.test.ts` | (root) | tests | test | 51 |
-| `tests/file-indexing.test.ts` | (root) | tests | test | 579 |
+| `tests/file-indexing.test.ts` | (root) | tests | test | 558 |
 | `tests/mcp-stdio.ts` | (root) | tests | test | 141 |
 | `tests/protocol.test.ts` | (root) | tests | test | 104 |
 | `tests/recall.test.ts` | (root) | tests | test | 85 |
