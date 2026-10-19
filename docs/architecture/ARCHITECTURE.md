@@ -252,13 +252,14 @@ The tests run with `bun test`. The type check runs with `bun run typecheck`. Bot
 | `file-indexing.test.ts` | A text file is indexed and found by search. A path outside the allowed roots is refused. A hit of a code file carries `line_info`, which is the header of its chunk. A text chunk that starts with a link reference has no `line_info`, and a file indexed without line chunks has none. A file that is not valid UTF-8 is refused and nothing is recorded, and a directory run lists the refused file in `errors`. A call of `index_file` over MCP answers `permission_denied` for such a file. |
 | `protocol.test.ts` | The server starts on stdio, negotiates a protocol version, lists the expected tools, and answers `initialize` within the budget. |
 | `tool-contract.test.ts` | The registered tools are exactly the expected 13, and every tool has a description. |
+| `tool-handlers.test.ts` | A started server answers 11 of the 13 tools with the documented fields: `add_memory`, `query_memory`, `archive_memories`, `recall_memory`, `get_stats`, `index_file`, `index_directory`, `search_files`, `list_indexed_files`, `get_file_info` and `get_file_stats`. A query is scoped by `user_id`, and it reaches the archives unless `include_archive` is false. A recall needs an archive of the same user. A file outside `REMEMBER_INDEX_ROOTS`, a missing file and a dotfile each get their own error object. An unknown tool is a JSON-RPC error with code -32602. An argument that breaks the input schema is refused with `isError` and a text message. |
 | `version.test.ts` | The exported version equals the version in `package.json`. |
 
-`tests/mcp-stdio.ts` is a helper that starts the server and exchanges JSON-RPC messages.
+`tests/mcp-stdio.ts` is a helper that starts the server and exchanges JSON-RPC messages. Its function `openToolSession` also finishes the handshake and returns a `call` that sends one `tools/call` and parses the JSON of the result.
 
 Gaps that a reader must know:
 
-- Three test files call tools: `bare-paths.test.ts` calls `get_stats`, and `scheduler.test.ts` calls `scheduler_status` and `scheduler_control`. `file-indexing.test.ts` calls `index_file` and `list_indexed_files`. The protocol tests stop at `initialize` and `tools/list`. The other 8 tool handlers, the argument coercion, the `not_found` and `invalid_argument` mappings and the server wrapper have no behavior test.
+- Every tool has at least one test that calls it over stdio. `tool-handlers.test.ts` calls 11 of the 13 tools. `scheduler.test.ts` calls `scheduler_status` and `scheduler_control`. The protocol tests stop at `initialize` and `tools/list`. No test calls a function of `HANDLERS` directly. The coercion helpers (`asOptionalString`, `asOptionalNumber`, `asOptionalBool` and `asOptionalStringList`) therefore run only with values that the input schema accepts. The `Unknown action` answer of `scheduler_control` has no test. The SDK refuses a value outside the `action` list before the handler runs.
 - The path cases of `bare-paths.test.ts` show the defect only on a runtime that throws for `.`. The runtime of the Windows CI job throws, so that job fails without `ensureDir`. The runtime of the Ubuntu CI job does not throw, so that job passes with or without `ensureDir`. The other suites use absolute paths under a temporary folder.
 - No test imports `classifySectors`, `embed` or `chunkCodeWithLines`. The engine tests reach the classifier and `embed` through `RememberSystem`. The `line_info` tests reach the line-aware chunker through `FileIndexer.indexFile` with a `.ts` file.
 
@@ -273,7 +274,7 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 27 | repo-tools map (whole repository) |
-| totalLinesOfCode | 4083 | repo-tools map (whole repository) |
+| totalSourceFiles | 28 | repo-tools map (whole repository) |
+| totalLinesOfCode | 4617 | repo-tools map (whole repository) |
 | runtimeCircularDeps | 0 | repo-tools map (whole repository) |
 | typeOnlyCircularDeps | 0 | repo-tools map (whole repository) |
