@@ -136,14 +136,20 @@ function splitsSurrogatePair(content: string, index: number): boolean {
 
 // A chunk that would end inside a pair ends one unit early, and a chunk that would start inside a pair
 // starts one unit late. So a chunk never holds more than `chunkSize` units and the overlap never grows.
+// With an overlap one below `chunkSize`, a chunk whose end moved early can end where the chunk before it ended.
+// It adds no text, so the function drops it.
 function chunkText(content: string, chunkSize: number, overlap: number): string[] {
   if (content.length <= chunkSize) return [content];
   const chunks: string[] = [];
   let start = 0;
+  let reached = 0;
   while (start < content.length) {
     let end = Math.min(start + chunkSize, content.length);
     if (splitsSurrogatePair(content, end)) end -= 1;
-    chunks.push(content.slice(start, end));
+    if (end > reached) {
+      chunks.push(content.slice(start, end));
+      reached = end;
+    }
     if (end >= content.length) break;
     start = Math.max(end - overlap, start + 1);
     if (splitsSurrogatePair(content, start)) start += 1;

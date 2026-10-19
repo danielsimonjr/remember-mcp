@@ -197,7 +197,7 @@ Errors:
 Chunking rules:
 
 - A file of type `python`, `javascript`, `typescript`, `java`, `cpp` or `c` is split by lines when `preserve_lines` is true. Each chunk holds `chunk_size` divided by 50 lines (at least 1) and starts with the header `[name:first-last]`. These chunks do not overlap.
-- Any other file is split into windows of `chunk_size` UTF-16 units. Each window starts `overlap` units before the end of the last window. A cut never splits a surrogate pair, so a code point stays whole.
+- Any other file is split into windows of `chunk_size` UTF-16 units. Each window starts `overlap` units before the end of the last window. A window starts at least one unit after the last start. A cut never splits a surrogate pair, so a code point stays whole. The indexer drops a window that ends where the last window ended, because that window adds no text.
 - The type comes from the file extension. An extension that is not in the map gives the type `unknown`, and the indexer treats the file as text.
 
 ### index_directory

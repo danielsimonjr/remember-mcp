@@ -128,7 +128,8 @@ describe("file indexing", () => {
       }
     }
 
-    // The chunks of a text of distinct code points must start in order, leave no gap, and reach the end.
+    // The chunks of a text of distinct code points must start in order, leave no gap, reach the end, and each one
+    // must end after the one before it. A chunk that ends where the one before it ended adds no text.
     function expectCoverage(content: string, chunks: string[], chunkSize: number) {
       let previousStart = -1;
       let reached = 0;
@@ -136,6 +137,7 @@ describe("file indexing", () => {
         const start = content.indexOf(chunk);
         expect(start).toBeGreaterThan(previousStart);
         expect(start).toBeLessThanOrEqual(reached);
+        expect(start + chunk.length).toBeGreaterThan(reached);
         expect(chunk.length).toBeLessThanOrEqual(chunkSize);
         expect(wellFormed(chunk)).toBe(true);
         previousStart = start;
@@ -180,15 +182,26 @@ describe("file indexing", () => {
         { chunk_size: 33, overlap: 0, count: 600 },
         { chunk_size: 32, overlap: 1, count: 600 },
         // An overlap one below the size makes the next start fall back to start + 1, so each chunk adds one or two units.
+        // The text is long enough that a cut falls inside a pair at several places, with each start parity.
         { chunk_size: 33, overlap: 32, count: 30 },
         { chunk_size: 32, overlap: 31, count: 30 },
+        { chunk_size: 64, overlap: 63, count: 60 },
+        { chunk_size: 101, overlap: 100, count: 60 },
       ];
-      for (const prefix of ["", "x"]) {
+      for (const prefix of ["", "x", "xx"]) {
         for (const { count, ...opts } of cases) {
           const content = prefix + astral(count);
           expectCoverage(content, await chunksOf(content, opts), opts.chunk_size);
         }
       }
+    }, 120_000);
+
+    test("keeps every window of a text without surrogates when the overlap is one below the size", async () => {
+      // Each window adds one unit to the text that the last window reached, so the guard against a window that adds
+      // nothing must drop none of them: 40 units and a size of 32 give the windows that start at 0 to 8.
+      const content = Array.from({ length: 40 }, (_, i) => String.fromCharCode(0x4e00 + i)).join("");
+      const chunks = await chunksOf(content, { chunk_size: 32, overlap: 31 });
+      expect(chunks).toEqual(Array.from({ length: 9 }, (_, i) => content.slice(i, i + 32)));
     }, 120_000);
 
     test("keeps the chunk boundaries of a text without surrogates", async () => {
