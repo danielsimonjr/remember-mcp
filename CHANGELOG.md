@@ -139,6 +139,12 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- **`tests/file-indexing.test.ts` keeps one `setup()` helper.** The describes for
+  `line_info`, for a file that is not valid UTF-8, and for a file with no text each defined the
+  same helper: a temp root, a `docs` folder as the only allowed root, and a `FileIndexer`. One
+  helper now sits at the top of the file. No test changes: 25 tests in the file and 119 in the
+  suite pass, with 3,204 `expect()` calls, before and after.
+
 - **Eight of the 13 tools now have a test that calls them through the stdio server.** The
   tools `add_memory`, `query_memory`, `archive_memories`, `recall_memory`, `index_directory`,
   `search_files`, `get_file_info` and `get_file_stats` had no such test. The tests in

@@ -275,6 +275,6 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 | Claim | Value | Source |
 |---|---|---|
 | totalSourceFiles | 28 | repo-tools map (whole repository) |
-| totalLinesOfCode | 5163 | repo-tools map (whole repository) |
+| totalLinesOfCode | 5142 | repo-tools map (whole repository) |
 | runtimeCircularDeps | 0 | repo-tools map (whole repository) |
 | typeOnlyCircularDeps | 0 | repo-tools map (whole repository) |
