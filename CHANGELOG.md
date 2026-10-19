@@ -85,23 +85,25 @@ All notable changes to this project will be documented in this file.
   tools `add_memory`, `query_memory`, `archive_memories`, `recall_memory`, `index_directory`,
   `search_files`, `get_file_info` and `get_file_stats` had no such test. The tests in
   `tests/protocol.test.ts` and `tests/tool-contract.test.ts` list their names and never call
-  them. The code that sits between the SDK and the memory system and the file indexer
-  (the argument defaults, the scope by `user_id`, and the error objects) ran only in a
-  manual session. The new file `tests/tool-handlers.test.ts` has 42 tests. It starts the
-  server in a new folder and calls `add_memory`, `query_memory`, `archive_memories`,
-  `recall_memory`, `get_stats`, `index_file`, `index_directory`, `search_files`,
-  `list_indexed_files`, `get_file_info` and `get_file_stats`. It also checks that the SDK
-  refuses an unknown tool (code -32602) and an argument that breaks the input schema
-  (`isError: true` with a text message), because those errors have a different shape from
-  the `{ error, message }` object that a handler returns. The tests assert the fields and
-  the counts that the tools return. They do not assert a salience or a score. The helper
+  them. The code that sits between the SDK and the memory system and the file indexer ran
+  only in a manual session: the argument defaults, the scope by `user_id`, the optional
+  arguments and the error objects. The new file `tests/tool-handlers.test.ts` has 47 tests.
+  It starts the server in a new folder and calls `add_memory`, `query_memory`,
+  `archive_memories`, `recall_memory`, `get_stats`, `index_file`, `index_directory`,
+  `search_files`, `list_indexed_files`, `get_file_info` and `get_file_stats`. It also checks
+  that the SDK refuses an unknown tool (code -32602) and an argument that breaks the input
+  schema (`isError: true` with a text message), because those errors have a different shape
+  from the `{ error, message }` object that a handler returns. The tests assert the fields,
+  the counts and the order of the hits that the tools return. They assert no exact salience
+  or score: a salience must lie from 0 to 1, and a score must be above 0. The helper
   `openToolSession` in `tests/mcp-stdio.ts` starts the server, finishes the handshake, and
-  returns `call` and `request`. It also passes an environment to the server only.
-  No source file changes. 21 mutations of `src/tools.ts` were tried one at a time (a
-  default flipped, a `user_id` dropped, an error label swapped, a filter ignored, a list or
-  a count altered). Each one fails at least one test, and the baseline of 42 passes ran
-  before the first mutation. The mutation with a flipped default of `include_archive`
-  fails 6 tests, and the mutation that drops `user_id` from `archive_memories` fails 9.
+  returns `call` and `request`. It also passes an environment to the server only. No file
+  under `src/` changes. 36 mutations were tried one at a time, on `src/tools.ts` and on the
+  sort in `src/remember/file-indexer.ts`: a default flipped, a `user_id` dropped, an argument
+  ignored, an error label swapped, a filter ignored, a list or a count altered. Each one
+  fails at least one test, and the baseline of 47 passes ran before the first mutation. The
+  mutation with a flipped default of `include_archive` fails 6 tests, and the mutation that
+  drops `user_id` from `archive_memories` fails 9.
 
 - **The changelog has one `## [Unreleased]` heading.** A second block of that name sat between
   the entries for 2.0.0 and 1.3.0. It held two Fixed entries: the removal of `baseUrl` for

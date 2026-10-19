@@ -102,22 +102,27 @@ export async function openToolSession(cwd: string, env: Record<string, string> =
   let id = 0;
   const request = (method: string, params: Record<string, unknown>) =>
     sendJsonRpc(server, { jsonrpc: "2.0", id: ++id, method, params });
+  const close = async () => {
+    server.proc.kill();
+    await server.proc.exited;
+  };
   try {
-    await request("initialize", {
+    const init = await request("initialize", {
       protocolVersion: LATEST_PROTOCOL_VERSION,
       capabilities: {},
       clientInfo: { name: "remember-mcp-test", version: "0.0.1" },
     });
+    if (!init?.result) throw new Error(`initialize failed: ${JSON.stringify(init)}`);
     server.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
     await server.stdin.flush();
   } catch (err) {
-    server.proc.kill();
-    await server.proc.exited;
+    await close();
     throw err;
   }
   return {
     server,
     request,
+    close,
     async call(name, args) {
       const response = await request("tools/call", { name, arguments: args });
       if (!response) throw new Error(`no response to tools/call ${name}`);
@@ -131,10 +136,6 @@ export async function openToolSession(cwd: string, env: Record<string, string> =
         // an error message from the SDK is plain text
       }
       return { value, isError: result.isError === true };
-    },
-    async close() {
-      server.proc.kill();
-      await server.proc.exited;
     },
   };
 }

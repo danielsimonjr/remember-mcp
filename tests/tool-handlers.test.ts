@@ -37,6 +37,22 @@ type Obj = Record<string, unknown>;
 const SLOW_MS = 120_000;
 const slowTest = (name: string, fn: () => Promise<void>) => test(name, fn, SLOW_MS);
 
+/** Call a tool, expect a result without an MCP error, and return its parsed JSON. */
+async function callTool(session: ToolSession, name: string, args: Obj): Promise<unknown> {
+  const r = await session.call(name, args);
+  expect(r.isError).toBe(false);
+  return r.value;
+}
+
+/** Expect a handler error with the `error` code, and a `message` that contains each text. */
+function expectToolError(value: unknown, error: string, text: string, ...moreTexts: string[]): void {
+  const r = value as Obj;
+  expect(r.error).toBe(error);
+  for (const t of [text, ...moreTexts]) {
+    expect(String(r.message)).toContain(t);
+  }
+}
+
 describe("memory tools over MCP", () => {
   let session: ToolSession;
   // Every test uses its own user_id, so the tests do not see each other's memories.
@@ -47,14 +63,10 @@ describe("memory tools over MCP", () => {
     session = await openToolSession(tmp("remember-tools-"));
   }, 120_000);
   afterAll(async () => {
-    await session.close();
+    await session?.close();
   });
 
-  const call = async (name: string, args: Obj) => {
-    const r = await session.call(name, args);
-    expect(r.isError).toBe(false);
-    return r.value;
-  };
+  const call = (name: string, args: Obj) => callTool(session, name, args);
 
   describe("add_memory", () => {
     slowTest("returns the stored memory in active storage", async () => {
@@ -84,9 +96,8 @@ describe("memory tools over MCP", () => {
     });
 
     slowTest("answers invalid_argument for a content over the length limit", async () => {
-      const r = (await call("add_memory", { content: "x".repeat(100_001), user_id: user() })) as Obj;
-      expect(r.error).toBe("invalid_argument");
-      expect(String(r.message)).toContain("content exceeds 100000 characters (100001 given)");
+      const r = await call("add_memory", { content: "x".repeat(100_001), user_id: user() });
+      expectToolError(r, "invalid_argument", "content exceeds 100000 characters (100001 given)");
     });
   });
 
@@ -108,7 +119,7 @@ describe("memory tools over MCP", () => {
       const b = user();
       await call("add_memory", { content: "Alice keeps the pager rota", user_id: a });
       expect(await call("query_memory", { query: "pager rota", user_id: b })).toEqual([]);
-      expect(((await call("query_memory", { query: "pager rota", user_id: a })) as Obj[]).length).toBe(1);
+      expect(await call("query_memory", { query: "pager rota", user_id: a })).toHaveLength(1);
     });
 
     slowTest("returns at most `k` results, and ten when `k` is absent", async () => {
@@ -127,15 +138,34 @@ describe("memory tools over MCP", () => {
         { error: "invalid_argument", message: "query must be a non-empty string" },
       ]);
     });
+
+    slowTest("returns only the memories of the sectors that `sectors` names", async () => {
+      const u = user();
+      const plain = (await call("add_memory", { content: "The deploy key rotates every 90 days", user_id: u })) as Obj;
+      const happy = (await call("add_memory", { content: "Yesterday we were happy about the deploy", user_id: u })) as Obj;
+      // The classifier gives the second memory the sector `emotional`, and the first memory not.
+      expect(happy.sectors).toContain("emotional");
+      expect(plain.sectors).not.toContain("emotional");
+
+      expect(await call("query_memory", { query: "deploy", user_id: u })).toHaveLength(2);
+      const hits = (await call("query_memory", { query: "deploy", user_id: u, sectors: ["emotional"] })) as Obj[];
+      expect(hits.map((h) => h.id)).toEqual([happy.id]);
+      expect(await call("query_memory", { query: "deploy", user_id: u, sectors: ["no-such-sector"] })).toEqual([]);
+    });
   });
 
   describe("archive_memories", () => {
-    slowTest("archives nothing from a memory that is newer than the default age", async () => {
+    // A pass selects a memory that is older than `age_days` AND has less salience than `min_salience`.
+    // A new memory has a salience of 0.85, so one default is overridden in each call to test the other.
+    slowTest("keeps a new memory under the default age, and under the default salience floor", async () => {
       const u = user();
       await call("add_memory", { content: "A fresh note about the lunch rota", user_id: u });
-      const r = (await call("archive_memories", { user_id: u })) as Obj;
-      expect(r.archived_count).toBe(0);
-      expect(r.active_remaining).toBe(1);
+      const byAge = (await call("archive_memories", { min_salience: 1, user_id: u })) as Obj;
+      expect(byAge.archived_count).toBe(0);
+      expect(byAge.active_remaining).toBe(1);
+      const bySalience = (await call("archive_memories", { age_days: 0, user_id: u })) as Obj;
+      expect(bySalience.archived_count).toBe(0);
+      expect(bySalience.active_remaining).toBe(1);
     });
 
     slowTest("moves the memory to an archive, and query_memory finds it there", async () => {
@@ -159,7 +189,7 @@ describe("memory tools over MCP", () => {
       await call("add_memory", { content: "The backup window opens at two in the morning", user_id: u });
       await call("archive_memories", { age_days: 0, min_salience: 1, user_id: u });
       expect(await call("query_memory", { query: "backup window", user_id: u, include_archive: false })).toEqual([]);
-      expect(((await call("query_memory", { query: "backup window", user_id: u })) as Obj[]).length).toBe(1);
+      expect(await call("query_memory", { query: "backup window", user_id: u })).toHaveLength(1);
     });
 
     slowTest("archives the memories of one user only", async () => {
@@ -218,21 +248,19 @@ describe("memory tools over MCP", () => {
     });
 
     slowTest("answers not_found for an archive that does not exist", async () => {
-      const r = (await call("recall_memory", {
+      const r = await call("recall_memory", {
         archive_file: "mcp_archives/user_nobody_1.mp4",
         content: "anything",
         user_id: user(),
-      })) as Obj;
-      expect(r.error).toBe("not_found");
-      expect(String(r.message)).toContain("Unknown archive: mcp_archives/user_nobody_1.mp4");
+      });
+      expectToolError(r, "not_found", "Unknown archive: mcp_archives/user_nobody_1.mp4");
     });
 
     slowTest("answers not_found when another user asks for the archive", async () => {
       const owner = user();
       const file = await archivedMemory(owner, "The owner archived this note on purpose");
-      const r = (await call("recall_memory", { archive_file: file, content: "stolen", user_id: user() })) as Obj;
-      expect(r.error).toBe("not_found");
-      expect(String(r.message)).toContain("Unknown archive");
+      const r = await call("recall_memory", { archive_file: file, content: "stolen", user_id: user() });
+      expectToolError(r, "not_found", "Unknown archive");
     });
 
     slowTest("answers invalid_argument for an empty content", async () => {
@@ -264,19 +292,20 @@ describe("memory tools over MCP", () => {
       expect(after.archive_file_count).toBe(1);
       expect(after.total_memories).toBe(3);
       expect(after.archive_size as number).toBeGreaterThan(0);
-      expect(after.total_size as number).toBeGreaterThanOrEqual(after.archive_size as number);
+      expect(after.total_size).toBe((after.active_db_size as number) + (after.archive_size as number));
     });
 
     slowTest("scopes the counts to the user, and adds the users up without a user", async () => {
       const a = user();
       const b = user();
+      const before = (await call("get_stats", {})) as Obj;
       await call("add_memory", { content: "Alice scoped note", user_id: a });
       await call("add_memory", { content: "Bob scoped note one", user_id: b });
       await call("add_memory", { content: "Bob scoped note two", user_id: b });
       expect(((await call("get_stats", { user_id: a })) as Obj).active_count).toBe(1);
       expect(((await call("get_stats", { user_id: b })) as Obj).active_count).toBe(2);
       const everyone = (await call("get_stats", {})) as Obj;
-      expect(everyone.active_count as number).toBeGreaterThanOrEqual(3);
+      expect(everyone.active_count).toBe((before.active_count as number) + 3);
     });
   });
 });
@@ -291,23 +320,19 @@ describe("file tools over MCP", () => {
   beforeAll(async () => {
     cwd = tmp("remember-filetools-");
     docs = join(cwd, "docs");
-    mkdirSync(join(docs, "sub"), { recursive: true });
+    mkdirSync(join(docs, "nested-docs"), { recursive: true });
     writeFileSync(doc("runbook.txt"), "The deploy runbook lives in the ops handbook and mentions blue-green releases.\n");
     writeFileSync(doc("retention.md"), "# Retention\nBackups are kept for ninety days before pruning.\n");
-    writeFileSync(join(docs, "sub", "rotation.txt"), "Rotation of the signing key happens every quarter.\n");
+    writeFileSync(join(docs, "nested-docs", "rotation.txt"), "Rotation of the signing key happens every quarter.\n");
     writeFileSync(doc(".secret.txt"), "dotfile body\n");
     // `REMEMBER_INDEX_ROOTS` confines the indexer to `docs`, so `cwd` itself is outside the roots.
     session = await openToolSession(cwd, { REMEMBER_INDEX_ROOTS: docs });
-  });
+  }, 120_000);
   afterAll(async () => {
-    await session.close();
+    await session?.close();
   });
 
-  const call = async (name: string, args: Obj) => {
-    const r = await session.call(name, args);
-    expect(r.isError).toBe(false);
-    return r.value;
-  };
+  const call = (name: string, args: Obj) => callTool(session, name, args);
 
   // The tests run in file order: the first ones fill the index and the later ones read it.
   slowTest("get_file_stats and list_indexed_files are empty before anything is indexed", async () => {
@@ -337,18 +362,16 @@ describe("file tools over MCP", () => {
   });
 
   slowTest("index_file refuses a dotfile unless `index_dotfiles` is true", async () => {
-    const refused = (await call("index_file", { file_path: doc(".secret.txt") })) as Obj;
-    expect(refused.error).toBe("permission_denied");
-    expect(String(refused.message)).toContain("Refusing to index dotfile");
+    const refused = await call("index_file", { file_path: doc(".secret.txt") });
+    expectToolError(refused, "permission_denied", "Refusing to index dotfile");
 
     const allowed = (await call("index_file", { file_path: doc(".secret.txt"), index_dotfiles: true })) as Obj;
     expect(allowed.status).toBe("indexed");
   });
 
   slowTest("index_file answers not_found for a missing file", async () => {
-    const r = (await call("index_file", { file_path: doc("missing.txt") })) as Obj;
-    expect(r.error).toBe("not_found");
-    expect(String(r.message)).toContain("File not found");
+    const r = await call("index_file", { file_path: doc("missing.txt") });
+    expectToolError(r, "not_found", "File not found");
   });
 
   slowTest("index_file and index_directory answer permission_denied for a path outside the roots", async () => {
@@ -358,10 +381,8 @@ describe("file tools over MCP", () => {
       ["index_file", { file_path: file }],
       ["index_directory", { dir_path: cwd }],
     ] as const) {
-      const r = (await call(tool, args)) as Obj;
-      expect(r.error).toBe("permission_denied");
-      expect(String(r.message)).toContain("outside allowed roots");
-      expect(String(r.message)).toContain("REMEMBER_INDEX_ROOTS");
+      const r = await call(tool, args);
+      expectToolError(r, "permission_denied", "outside allowed roots", "REMEMBER_INDEX_ROOTS");
     }
   });
 
@@ -372,14 +393,14 @@ describe("file tools over MCP", () => {
     expect(all.error_count).toBe(0);
     expect(all.errors).toEqual([]);
     const names = (all.indexed_files as Obj[]).map((f) => String(f.file_path).replace(docs, "").replace(/\\/g, "/"));
-    expect(names.sort()).toEqual(["/retention.md", "/runbook.txt", "/sub/rotation.txt"]);
+    expect(names.sort()).toEqual(["/nested-docs/rotation.txt", "/retention.md", "/runbook.txt"]);
 
     const onlyMarkdown = (await call("index_directory", { dir_path: docs, pattern: "*.md" })) as Obj;
     expect(onlyMarkdown.indexed_count).toBe(1);
     const files = onlyMarkdown.indexed_files as Obj[];
     expect(files).toHaveLength(1);
     expect(files[0]!.status).toBe("already_indexed");
-    expect(String(files[0]!.file_path)).toBe(doc("retention.md"));
+    expect(files[0]!.file_path).toBe(doc("retention.md"));
   });
 
   slowTest("list_indexed_files lists each indexed file with its type and size", async () => {
@@ -392,7 +413,7 @@ describe("file tools over MCP", () => {
     expect(byName.get("runbook.txt")!.chunk_count).toBe(1);
   });
 
-  slowTest("get_file_info returns the metadata of an indexed file, and null for any other file", async () => {
+  slowTest("get_file_info returns the metadata of an indexed file, and null for a path that was never indexed", async () => {
     const info = (await call("get_file_info", { file_path: doc("runbook.txt") })) as Obj;
     expect(info.file_path).toBe(doc("runbook.txt"));
     expect(info.file_name).toBe("runbook.txt");
@@ -412,16 +433,24 @@ describe("file tools over MCP", () => {
     expect(stats.total_video_size as number).toBeGreaterThan(0);
   });
 
-  slowTest("search_files returns the best chunk first and limits the hits to `top_k`", async () => {
-    const hits = (await call("search_files", { query: "blue-green deploy runbook", top_k: 1 })) as Obj[];
-    expect(hits).toHaveLength(1);
-    expect(hits[0]!.file_name).toBe("runbook.txt");
-    expect(String(hits[0]!.content)).toContain("blue-green");
-    expect(hits[0]!.score as number).toBeGreaterThan(0);
+  slowTest("search_files orders the hits by score, and limits them to `top_k`", async () => {
+    // `runbook.txt` was indexed first, so a search that skips its sort would put it first.
+    const best = (await call("search_files", { query: "signing key rotation quarter", top_k: 1 })) as Obj[];
+    expect(best).toHaveLength(1);
+    expect(best[0]!.file_name).toBe("rotation.txt");
+    expect(String(best[0]!.content)).toContain("signing key");
+    expect(best[0]!.score as number).toBeGreaterThan(0);
+
+    // Every indexed chunk is a hit when `top_k` is absent, because the default is above the 4 chunks.
+    const all = (await call("search_files", { query: "backups ninety days" })) as Obj[];
+    expect(all).toHaveLength(4);
+    expect(all[0]!.file_name).toBe("retention.md");
+    const scores = all.map((h) => h.score as number);
+    expect(scores).toEqual([...scores].sort((a, b) => b - a));
   });
 
   slowTest("search_files keeps the files whose path contains `file_filter`", async () => {
-    const hits = (await call("search_files", { query: "signing key", file_filter: "sub" })) as Obj[];
+    const hits = (await call("search_files", { query: "signing key", file_filter: "nested-docs" })) as Obj[];
     expect(hits.map((h) => h.file_name)).toEqual(["rotation.txt"]);
     expect(await call("search_files", { query: "signing key", file_filter: "no-such-folder" })).toEqual([]);
   });
@@ -441,6 +470,92 @@ describe("file tools over MCP", () => {
   });
 });
 
+describe("optional arguments of the file tools over MCP", () => {
+  let session: ToolSession;
+  let docs: string;
+
+  const doc = (...parts: string[]) => join(docs, ...parts);
+  const call = (name: string, args: Obj) => callTool(session, name, args);
+
+  beforeAll(async () => {
+    const cwd = tmp("remember-fileargs-");
+    docs = join(cwd, "docs");
+    mkdirSync(join(docs, "batch", "keep"), { recursive: true });
+    mkdirSync(join(docs, "batch", "skipme"), { recursive: true });
+    // A code file of 30 lines. The default chunk size gives the chunks of the lines 1-20 and 21-30.
+    const code = Array.from({ length: 30 }, (_, i) => (i < 20 ? `const alpha = ${i + 1};` : `const omega = ${i + 1};`));
+    writeFileSync(doc("by-lines.ts"), code.join("\n"));
+    writeFileSync(doc("whole.ts"), code.join("\n") + "\n// a second copy\n");
+    // 20 sentences of 32 characters. The files differ in their last word, so the hashes differ.
+    const text = "alpha beta gamma delta epsilon. ".repeat(20);
+    writeFileSync(doc("small-chunks.txt"), text);
+    writeFileSync(doc("default-chunks.txt"), text + "tail");
+    writeFileSync(doc("batch", "keep", "kept.txt"), text + "kept");
+    writeFileSync(doc("batch", "skipme", "skipped.txt"), "a skipped file about gardening\n");
+    writeFileSync(doc(".hidden.txt"), "a hidden file about gardening\n");
+    session = await openToolSession(cwd, { REMEMBER_INDEX_ROOTS: docs });
+  }, 120_000);
+  afterAll(async () => {
+    await session?.close();
+  });
+
+  // The tests run in file order, and no test reads a file that an earlier test did not index.
+  slowTest("index_file splits a code file by lines, unless `preserve_lines` is false", async () => {
+    const split = (await call("index_file", { file_path: doc("by-lines.ts") })) as Obj;
+    expect(split.chunk_count).toBe(2);
+    const late = (await call("search_files", { query: "omega", file_filter: "by-lines.ts", top_k: 1 })) as Obj[];
+    expect(String(late[0]!.content).startsWith("[by-lines.ts:21-30]\n")).toBe(true);
+    expect(late[0]!.line_info).toBe("[by-lines.ts:21-30]");
+
+    const whole = (await call("index_file", { file_path: doc("whole.ts"), preserve_lines: false })) as Obj;
+    expect(whole.chunk_count).toBe(1);
+    const hit = (await call("search_files", { query: "omega", file_filter: "whole.ts", top_k: 1 })) as Obj[];
+    expect(String(hit[0]!.content).startsWith("const alpha = 1;")).toBe(true);
+    expect(hit[0]!.line_info ?? null).toBeNull();
+  });
+
+  slowTest("index_file stores the `chunk_size` and the `overlap` that it was given, and the defaults otherwise", async () => {
+    const small = (await call("index_file", { file_path: doc("small-chunks.txt"), chunk_size: 64, overlap: 0 })) as Obj;
+    expect(small.chunk_count).toBe(10);
+    const smallInfo = (await call("get_file_info", { file_path: doc("small-chunks.txt") })) as Obj;
+    expect(smallInfo.chunk_size).toBe(64);
+    expect(smallInfo.overlap).toBe(0);
+
+    const byDefault = (await call("index_file", { file_path: doc("default-chunks.txt") })) as Obj;
+    expect(byDefault.chunk_count).toBe(1);
+    const defaultInfo = (await call("get_file_info", { file_path: doc("default-chunks.txt") })) as Obj;
+    expect(defaultInfo.chunk_size).toBe(1024);
+    expect(defaultInfo.overlap).toBe(128);
+  });
+
+  slowTest("index_directory skips the paths that `exclude` names, and passes `chunk_size` and `overlap` on", async () => {
+    const r = (await call("index_directory", {
+      dir_path: doc("batch"),
+      exclude: ["skipme"],
+      chunk_size: 64,
+      overlap: 0,
+    })) as Obj;
+    expect(r.indexed_count).toBe(1);
+    expect(r.skipped_count).toBe(1);
+    const kept = (await call("get_file_info", { file_path: doc("batch", "keep", "kept.txt") })) as Obj;
+    expect(kept.chunk_size).toBe(64);
+    expect(kept.overlap).toBe(0);
+    expect(await call("get_file_info", { file_path: doc("batch", "skipme", "skipped.txt") })).toBeNull();
+  });
+
+  // A glob scan never returns a dotfile unless the pattern names it, so the pattern names this one.
+  slowTest("index_directory skips a dotfile that its pattern names, unless `index_dotfiles` is true", async () => {
+    const refused = (await call("index_directory", { dir_path: docs, pattern: ".hidden.txt" })) as Obj;
+    expect(refused.indexed_count).toBe(0);
+    expect(refused.skipped_count).toBe(1);
+    expect(await call("get_file_info", { file_path: doc(".hidden.txt") })).toBeNull();
+
+    const allowed = (await call("index_directory", { dir_path: docs, pattern: ".hidden.txt", index_dotfiles: true })) as Obj;
+    expect(allowed.indexed_count).toBe(1);
+    expect(await call("get_file_info", { file_path: doc(".hidden.txt") })).not.toBeNull();
+  });
+});
+
 describe("errors that the SDK raises before a handler runs", () => {
   let session: ToolSession;
 
@@ -448,7 +563,7 @@ describe("errors that the SDK raises before a handler runs", () => {
     session = await openToolSession(tmp("remember-schema-"));
   }, 120_000);
   afterAll(async () => {
-    await session.close();
+    await session?.close();
   });
 
   test("an unknown tool is a JSON-RPC error with code -32602", async () => {
