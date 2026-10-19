@@ -1,7 +1,7 @@
 /**
  * QR-video archive helpers (TypeScript memvid stand-in).
  *
- * Each chunk becomes a QR frame; ffmpeg packs the frames into an MP4.
+ * Each chunk becomes one or more QR frames; ffmpeg packs the frames into an MP4.
  * Search uses the JSON sidecar's hashed embeddings — not FAISS — so cold
  * start stays cheap. The MP4 remains the durable, portable payload.
  */
@@ -42,14 +42,27 @@ export interface EncodeResult {
   compression_ratio: number;
 }
 
-const QR_CAPACITY = 800; // conservative byte budget per frame (alphanumeric-ish)
+// A QR frame at error correction level M holds 2331 bytes. A budget of 800 UTF-8 bytes
+// leaves a wide margin for text of any width, and ASCII text keeps frames of 800 characters.
+const QR_FRAME_BYTES = 800;
 
+// Cut the text into slices of at most QR_FRAME_BYTES UTF-8 bytes. A cut falls between two
+// code points, never inside a surrogate pair, because the QR library throws on a lone surrogate.
 function splitForQr(text: string): string[] {
-  if (text.length <= QR_CAPACITY) return [text];
   const parts: string[] = [];
-  for (let i = 0; i < text.length; i += QR_CAPACITY) {
-    parts.push(text.slice(i, i + QR_CAPACITY));
+  let part = "";
+  let bytes = 0;
+  for (const char of text) {
+    const size = Buffer.byteLength(char, "utf8");
+    if (bytes + size > QR_FRAME_BYTES) {
+      parts.push(part);
+      part = "";
+      bytes = 0;
+    }
+    part += char;
+    bytes += size;
   }
+  parts.push(part);
   return parts;
 }
 

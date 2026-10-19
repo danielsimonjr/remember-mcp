@@ -17,13 +17,13 @@ The first four rows come from `repo-tools map`. The scope of each row is the who
 | Metric | Value | Scope | Source |
 |---|---|---|---|
 | Source files | 28 | whole repository | `repo-tools map` |
-| Lines of code | 4733 | whole repository | `repo-tools map` |
+| Lines of code | 4886 | whole repository | `repo-tools map` |
 | Exports | 61 | whole repository | `repo-tools map` |
 | Entry roots | 3 | whole repository | `repo-tools map` |
 | Files in `src/` | 15 | `src/` only | `file-inventory.json`, area `src` |
-| Lines in `src/` | 2775 | `src/` only | `file-inventory.json`, area `src` |
+| Lines in `src/` | 2788 | `src/` only | `file-inventory.json`, area `src` |
 | Files in `tests/` | 13 | `tests/` only | `file-inventory.json`, area `tests` |
-| Lines in `tests/` | 1958 | `tests/` only | `file-inventory.json`, area `tests` |
+| Lines in `tests/` | 2098 | `tests/` only | `file-inventory.json`, area `tests` |
 | MCP tools | 13 | `src/tools.ts` | direct count of the `TOOLS` array |
 
 The three entry roots are `src/index.ts` (the `bin` entry), `src/server.ts` (the `./server` export) and `src/remember/index.ts` (the `.` export).
@@ -32,7 +32,7 @@ The three entry roots are `src/index.ts` (the `bin` entry), `src/server.ts` (the
 
 ```
 remember-mcp/
-├── src/                        15 files, 2775 lines
+├── src/                        15 files, 2788 lines
 │   ├── index.ts                stdio entry: serves the MCP server, handles SIGINT and SIGTERM
 │   ├── server.ts               builds the MCP server and registers every tool
 │   ├── tools.ts                tool definitions, handlers, and the lazy singletons
@@ -49,7 +49,7 @@ remember-mcp/
 │       ├── file-indexer.ts     FileIndexer: file chunking, indexing and search
 │       ├── ensure-dir.ts       ensureDir: creates a folder only when it is missing
 │       └── types.ts            shared types and the sector list
-├── tests/                      13 files, 1958 lines (12 test files and one stdio helper)
+├── tests/                      13 files, 2098 lines (12 test files and one stdio helper)
 ├── docs/architecture/          this documentation set
 ├── README.md
 ├── CHANGELOG.md
@@ -81,12 +81,12 @@ Most code loads with a plain `import`. These mechanisms differ:
 
 ## Unused code
 
-`repo-tools map` reports one orphaned file, 1 file with no importer, and 15 exports with no importer.
+`repo-tools map` reports one orphaned file, 1 file with no importer, and 14 exports with no importer.
 
 - **`src/example.ts`** is the orphaned file. The file is a demo, so the missing importer is by design.
 - **`setup` in `src/tools.ts`** has no reference. The function warms the singletons for tests and benchmarks.
 - **`PKG_NAME` in `src/version.ts`** has no reference.
-- **13 exports** are types, constants and functions that no other file imports. Their own module uses each one.
+- **12 exports** are types, constants and functions that no other file imports. Their own module uses each one.
 
 The count is not a deletion list. The `exports` field of `package.json` exposes two subpaths: `.` (the barrel) and `./server`. A symbol that is outside both is not public API. A symbol in the barrel is public API, and to remove it is a breaking change.
 
@@ -108,9 +108,9 @@ The claims come from `repo-tools map .`, which reads the whole repository. The o
 | Claim | Value | Source |
 |---|---|---|
 | totalSourceFiles | 28 | repo-tools map (whole repository) |
-| totalLinesOfCode | 4733 | repo-tools map (whole repository) |
+| totalLinesOfCode | 4886 | repo-tools map (whole repository) |
 | totalExports | 61 | repo-tools map (whole repository) |
 | entryRoots | 3 | repo-tools map (whole repository) |
 | orphanedFiles | 1 | repo-tools map (whole repository) |
 | noImporterFileCount | 1 | repo-tools map (whole repository) |
-| unusedExportsCount | 15 | repo-tools map (whole repository) |
+| unusedExportsCount | 14 | repo-tools map (whole repository) |

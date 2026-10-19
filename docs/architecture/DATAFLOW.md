@@ -90,7 +90,6 @@ Limits of this path:
 
 - A second is free when the archive index has no entry for it and the folder has no video or sidecar of that name. A second pass for the same key in the same second therefore uses the next second.
 - No lock covers two server processes on one archive folder. The pick and the first write are separate steps, so two processes can pick one name.
-- A QR frame holds a limited number of bytes. A slice of 800 characters that are three bytes long each is too large, so step 7 throws. The same rows are then eligible again in the next pass.
 
 ### recall_memory
 
@@ -179,7 +178,7 @@ A search reads the sidecar JSON from disk on every call. The server does not see
 |---|---|---|
 | A handler rejects an argument | The handler returns `{ error, message }`. | A normal result with the error object. A search tool returns a list that holds the object. |
 | A handler with no `try` block throws | The wrapper catches the error and writes it to standard error. | `{ "status": "error", "error": <message> }` with `isError` set. |
-| `ffmpeg` is missing, or the QR library rejects a slice | `encodeChunks()` removes its outputs and throws. | `archive_memories` returns zero counts. `index_file` returns `invalid_argument`. |
+| `ffmpeg` is missing, or the QR library rejects a slice (empty text, or a lone surrogate) | `encodeChunks()` removes its outputs and throws. | `archive_memories` returns zero counts. `index_file` returns `invalid_argument`. |
 | One archive cannot be read during a query | `_queryArchives()` logs the error. | The query returns the hits of the other archives. |
 | A scheduler pass throws | `_tick()` stores `last_error` and retries after 60 seconds. | `scheduler_status` shows `last_error`. |
 | The metadata file is corrupt | `FileIndexer` renames the file to `file_metadata.json.corrupt`. | The index starts empty. |

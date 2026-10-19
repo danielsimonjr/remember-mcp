@@ -78,6 +78,27 @@ describe("file indexing", () => {
     indexer.close();
   });
 
+  test("indexes a CJK text file at the default chunk_size", async () => {
+    // The old frame size of 800 characters is 2400 bytes of CJK text, which is more than one QR frame holds (2331 bytes).
+    const root = tmp();
+    const docs = join(root, "docs");
+    mkdirSync(docs, { recursive: true });
+    const filePath = join(docs, "cjk.txt");
+    writeFileSync(filePath, "漢".repeat(3000));
+    const indexer = new FileIndexer({
+      index_dir: join(root, "index"),
+      allowed_roots: [docs],
+    });
+
+    const result = await indexer.indexFile({ file_path: filePath });
+    expect(result.status).toBe("indexed");
+    // 3000 characters at chunk_size 1024 give four chunks; every chunk is stored, so a search returns all four.
+    expect(Number(result.chunk_count)).toBe(4);
+    expect(Number(result.video_size)).toBeGreaterThan(0);
+    expect(indexer.search({ query: "漢", top_k: 5 })).toHaveLength(4);
+    indexer.close();
+  }, 120_000);
+
   describe("line_info on search hits", () => {
     // A code file of 30 lines. The default chunk_size 1024 gives 20 lines per chunk, so the
     // chunks are lines 1-20 and lines 21-30. The first 20 lines carry the token alpha, the

@@ -90,7 +90,7 @@ Edges that the design forbids:
 
 **Rationale.** The comment in `archive.ts` gives the reason for the split. A search uses the sidecar embeddings and not FAISS, so a cold start stays cheap. The MP4 remains the durable, portable payload. The same format serves archived memories and indexed files, so one encoder serves both.
 
-**Trade-offs.** Each archive needs `ffmpeg` on the `PATH`. A slice of 800 characters limits the frame size, and the limit counts characters, not bytes. A search never decodes the video, so the video is not read back by the server at all.
+**Trade-offs.** Each archive needs `ffmpeg` on the `PATH`. One frame holds at most 800 UTF-8 bytes of text, so a long text becomes several frames. A search never decodes the video, so the video is not read back by the server at all.
 
 ### Lazy initialization
 
@@ -176,7 +176,7 @@ Indexes: `user_id`, `salience`, `created_at`.
 
 | File | Content |
 |---|---|
-| `user_<key>_<unix seconds>.mp4` | One QR frame for each slice of at most 800 characters. |
+| `user_<key>_<unix seconds>.mp4` | One QR frame for each slice of at most 800 UTF-8 bytes. |
 | `user_<key>_<unix seconds>.json` | `{ version: 1, chunks: [{ text, embedding }], created_at, total_chunks }`. |
 
 The archive index in memory has two levels. The first level is the user key. The second level is the timestamp. Each entry holds the file paths, the creation time and the memory count. The constructor of `RememberSystem` rebuilds the index from the file names.
@@ -219,7 +219,7 @@ The code has these cost properties. The document gives no timing, because no ben
 - **Active query.** The query reads every row of the owner, decodes each embedding, and sorts in memory. The cost grows in a straight line with the number of memories.
 - **Embedding.** `embed()` counts each token again for every slot update. The cost grows with the square of the token count of one text.
 - **Archive query.** Each archive search reads and parses the whole sidecar JSON. The cost grows with the number of archives and the number of chunks.
-- **Archive pass.** The pass writes one PNG for each 800-character slice and runs `ffmpeg` once.
+- **Archive pass.** The pass writes one PNG for each slice of at most 800 UTF-8 bytes and runs `ffmpeg` once.
 - **File indexing.** One call handles at most 500 candidate files. A file larger than 32 MiB is refused. A code file or a text file with many chunks makes many frames.
 - **Concurrency.** The write lock serializes `addMemory` and the two storage steps of an archive pass. `query()`, `getStats()` and the file indexer take no lock. Each SQLite call in the process is synchronous, so the call finishes before the next call starts.
 
@@ -248,8 +248,8 @@ The tests run with `bun test`. The type check runs with `bun run typecheck`. Bot
 | `ensure-dir.test.ts` | `ensureDir` creates nested folders, accepts a folder that exists, accepts `.`, `..` and `./`, and throws for a path that names a file. |
 | `recall.test.ts` | An archived memory can be recalled. A recall from an unknown archive leaves active storage unchanged. |
 | `scheduler.test.ts` | `runNow` returns false and runs no pass while `enabled` is false, and returns true after a pass otherwise. A timer pass does nothing while `enabled` is false. A started server answers `run_now` with `Scheduler not started` before `start` and with `Archival triggered` after it. |
-| `video.test.ts` | Encoding and searching a sidecar round-trip. A query reaches archived memories. |
-| `file-indexing.test.ts` | A text file is indexed and found by search. A path outside the allowed roots is refused. A hit of a code file carries `line_info`, which is the header of its chunk. A text chunk that starts with a link reference has no `line_info`, and a file indexed without line chunks has none. A file that is not valid UTF-8 is refused and nothing is recorded, and a directory run lists the refused file in `errors`. A call of `index_file` over MCP answers `permission_denied` for such a file. |
+| `video.test.ts` | Encoding and searching a sidecar round-trip. A query reaches archived memories. An archive pass takes a memory of more than 800 CJK characters. A QR frame holds at most 800 UTF-8 bytes, and a cut falls between two code points, so a cut never splits a surrogate pair. |
+| `file-indexing.test.ts` | A text file is indexed and found by search. A path outside the allowed roots is refused. A hit of a code file carries `line_info`, which is the header of its chunk. A text chunk that starts with a link reference has no `line_info`, and a file indexed without line chunks has none. A file that is not valid UTF-8 is refused and nothing is recorded, and a directory run lists the refused file in `errors`. A call of `index_file` over MCP answers `permission_denied` for such a file. A CJK file is indexed at the default `chunk_size`. |
 | `protocol.test.ts` | The server starts on stdio, negotiates a protocol version, lists the expected tools, and answers `initialize` within the budget. |
 | `tool-contract.test.ts` | The registered tools are exactly the expected 13, and every tool has a description. |
 | `tool-handlers.test.ts` | A started server answers 11 of the 13 tools with the documented fields: `add_memory`, `query_memory`, `archive_memories`, `recall_memory`, `get_stats`, `index_file`, `index_directory`, `search_files`, `list_indexed_files`, `get_file_info` and `get_file_stats`. A query is scoped by `user_id`, and it reaches the archives unless `include_archive` is false. A recall needs an archive of the same user. A file outside `REMEMBER_INDEX_ROOTS`, a missing file and a dotfile each get their own error object. An unknown tool is a JSON-RPC error with code -32602. An argument that breaks the input schema is refused with `isError` and a text message. |
@@ -275,6 +275,6 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 | Claim | Value | Source |
 |---|---|---|
 | totalSourceFiles | 28 | repo-tools map (whole repository) |
-| totalLinesOfCode | 4733 | repo-tools map (whole repository) |
+| totalLinesOfCode | 4886 | repo-tools map (whole repository) |
 | runtimeCircularDeps | 0 | repo-tools map (whole repository) |
 | typeOnlyCircularDeps | 0 | repo-tools map (whole repository) |

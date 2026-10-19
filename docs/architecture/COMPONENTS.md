@@ -215,8 +215,8 @@ Behavior notes:
 
 - **Encode steps.** `encodeChunks` makes a temporary folder, writes the JSON sidecar, writes one PNG per frame, runs `ffmpeg`, measures the video, and removes the temporary folder.
 - **Sidecar write.** The sidecar goes to a temporary file first. A rename then replaces the final file, so a reader never sees a partial file.
-- **Frames.** A chunk longer than 800 characters is cut into slices of 800 characters. Each slice becomes one 512-pixel QR frame with error correction level M.
-- **Frame limit.** The 800 is a count of characters. A QR frame at level M holds about 2331 bytes (the limit of QR version 40). A slice of 800 characters that are three bytes long each is larger, so the QR library throws. The encode then fails.
+- **Frames.** A chunk of more than 800 UTF-8 bytes is cut into slices of at most 800 bytes. A cut falls between two code points, so a slice never ends inside a surrogate pair. Each slice becomes one 512-pixel QR frame with error correction level M.
+- **Frame limit.** A QR frame at level M holds 2331 bytes (the limit of QR version 40), so a budget of 800 bytes leaves a wide margin. An ASCII slice has 800 characters. A slice of three-byte characters, such as CJK, has at most 266 characters. A slice of four-byte characters, such as emoji, has at most 200 characters. The QR library throws on a lone surrogate, which a cut inside a pair would make.
 - **Video.** The `ffmpeg` call reads the frames at 2 frames per second and writes H.264 in the `yuv420p` pixel format, with the `faststart` flag. The frame count is at least 1.
 - **Encode errors.** `ffmpeg` that is missing from `PATH` or that exits with an error throws an `Error` with the text `ffmpeg encode failed`. After any error, the function removes the outputs and throws again.
 - **Compression ratio.** The ratio is the UTF-8 size of the chunks divided by the video size. The value is 1 when the video size is 0.
