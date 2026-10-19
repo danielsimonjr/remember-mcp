@@ -6,15 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- **`index_file` on an empty text file now names the cause.** The text chunker returned one
-  empty chunk for an empty text, so the QR library threw `No input text`, and the call answered
-  `invalid_argument` with that message. The chunker now returns no chunk for an empty text. The
-  check for a file with no chunk was already in `indexFile`. It now runs for an empty file and
-  throws `No indexable content in <path>`. The call still answers `invalid_argument`, and a
-  directory run lists the file in `errors` with the new message. Every file that indexed before
-  indexes as before. An empty code file with `preserve_lines` true still indexes its header
-  chunk. Tests cover the file, the directory run and the answer over MCP. One more test pins
-  that a file of one space is still indexed.
+- **`index_file` refuses an empty file of any type and names the cause.** The text chunker
+  returned one empty chunk for an empty text, so the QR library threw `No input text`, and the
+  call answered `invalid_argument` with that message. The code chunker returned one header chunk
+  for an empty file, so the call indexed the file and recorded the hash that every empty file
+  shares. The known-hash exit ran before any content check. After an empty code file, an empty
+  text file answered `already_indexed` and not the refusal, and the answer of a directory run
+  depended on the order of the files. An index that an earlier version built keeps that hash.
+  `indexFile` now refuses a file of zero bytes before it looks up the hash. The message is
+  `No indexable content in <path>`, the call answers `invalid_argument`, the indexer records
+  nothing, and a directory run lists the file in `errors`. A file of one line break or one space
+  is not empty and indexes as before. Tests cover a code, a text, a PDF and an EPUB file, both
+  orders, an index that holds the hash, a directory run and the answer over MCP.
 
 - **The text chunker no longer keeps a chunk that adds no text.** With an `overlap` one below
   `chunk_size`, a window can start one unit after the last kept window. If the end of that

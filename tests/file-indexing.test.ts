@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/server";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -410,6 +411,74 @@ describe("file indexing", () => {
       indexer.close();
     }, 120_000);
 
+    test("an empty code, PDF or EPUB file is refused like an empty text file, and nothing is recorded", async () => {
+      const { docs, indexer } = setup();
+      // The text file comes between two code files, so a refusal cannot depend on the type refused before it.
+      for (const name of ["empty.ts", "empty.txt", "empty.py", "empty.pdf", "empty.epub"]) {
+        const filePath = join(docs, name);
+        writeFileSync(filePath, "");
+
+        const refusal = indexer.indexFile({ file_path: filePath });
+        await expect(refusal).rejects.toThrow("No indexable content in");
+        await expect(refusal).rejects.toThrow(name);
+      }
+      expect(indexer.listIndexedFiles()).toEqual([]);
+      indexer.close();
+    }, 120_000);
+
+    test("a code file of one line break is still indexed, with its header chunk", async () => {
+      const { docs, indexer } = setup();
+      const filePath = join(docs, "blank.ts");
+      writeFileSync(filePath, "\n");
+
+      const result = await indexer.indexFile({ file_path: filePath });
+      expect(result.status).toBe("indexed");
+      expect(result.chunk_count).toBe(1);
+      expect(indexer.getFileInfo(filePath)!.chunks_meta).toEqual([
+        { start_line: 1, end_line: 2, char_start: 0, char_end: 2 },
+      ]);
+      indexer.close();
+    }, 120_000);
+
+    test("an index that already holds the hash of an empty file still refuses an empty file", async () => {
+      const root = tmp();
+      const docs = join(root, "docs");
+      const indexDir = join(root, "index");
+      mkdirSync(docs, { recursive: true });
+      mkdirSync(indexDir, { recursive: true });
+      // The record that an earlier version wrote when it indexed an empty code file.
+      const emptyHash = createHash("sha256").update("").digest("hex");
+      writeFileSync(
+        join(indexDir, "file_metadata.json"),
+        JSON.stringify({
+          [emptyHash]: {
+            file_path: join(docs, "old.ts"),
+            file_name: "old.ts",
+            file_hash: emptyHash,
+            file_type: "typescript",
+            file_size: 0,
+            chunk_count: 1,
+            chunk_size: 1024,
+            overlap: 128,
+            video_path: join(indexDir, `${emptyHash}.mp4`),
+            index_path: join(indexDir, `${emptyHash}.json`),
+            chunks_meta: [{ start_line: 1, end_line: 1, char_start: 0, char_end: 1 }],
+            indexed_at: "2026-01-01T00:00:00.000Z",
+            stats: { video_size: 1024, compression_ratio: 1 },
+          },
+        }),
+      );
+      const indexer = new FileIndexer({ index_dir: indexDir, allowed_roots: [docs] });
+      expect(indexer.listIndexedFiles()).toHaveLength(1);
+      for (const name of ["empty.txt", "empty.ts"]) {
+        const filePath = join(docs, name);
+        writeFileSync(filePath, "");
+        await expect(indexer.indexFile({ file_path: filePath })).rejects.toThrow("No indexable content in");
+      }
+      expect(indexer.listIndexedFiles()).toHaveLength(1);
+      indexer.close();
+    }, 120_000);
+
     test("a directory run records the empty file as an error and indexes the others", async () => {
       const { docs, indexer } = setup();
       writeFileSync(join(docs, "good.txt"), "a plain ASCII file about the retention policy\n");
@@ -421,6 +490,20 @@ describe("file indexing", () => {
       const errors = result.errors as Array<{ file: string; error: string }>;
       expect(errors[0]!.file).toContain("empty.txt");
       expect(errors[0]!.error).toContain("No indexable content in");
+      indexer.close();
+    }, 120_000);
+
+    test("a directory run records every empty file as an error, whatever its type", async () => {
+      const { docs, indexer } = setup();
+      writeFileSync(join(docs, "good.txt"), "a plain ASCII file about the retention policy\n");
+      for (const name of ["empty.ts", "empty.py", "empty.md"]) writeFileSync(join(docs, name), "");
+
+      const result = await indexer.indexDirectory({ dir_path: docs });
+      expect(result.indexed_count).toBe(1);
+      expect(result.error_count).toBe(3);
+      const errors = result.errors as Array<{ file: string; error: string }>;
+      for (const e of errors) expect(e.error).toContain("No indexable content in");
+      expect(errors.map((e) => e.file.split(/[\\/]/).pop()).sort()).toEqual(["empty.md", "empty.py", "empty.ts"]);
       indexer.close();
     }, 120_000);
   });

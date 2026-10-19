@@ -124,12 +124,13 @@ The path never reads the archive. The caller supplies the content.
 2. `validateChunking()` checks `chunk_size` (32 to 1,000,000) and `overlap` (at least 0, below `chunk_size`).
 3. `_enforcePathPolicy()` resolves the path and checks the allowed roots, the dotfile rule and the type of the target.
 4. The method refuses a file above the size limit.
-5. The method hashes the file bytes. When the hash is already in `metadata`, the method returns `already_indexed`.
-6. The method refuses PDF and EPUB files, and files with a zero byte in the first 8192 bytes.
+5. The method refuses an empty file.
+6. The method hashes the file bytes. When the hash is already in `metadata`, the method returns `already_indexed`.
+7. The method refuses PDF and EPUB files, and files with a zero byte in the first 8192 bytes.
    The method then decodes the bytes as strict UTF-8 and refuses a file that is not valid UTF-8.
-7. For a code type with `preserve_lines`, `chunkCodeWithLines()` builds the chunks. For other files, `chunkText()` builds them. The method refuses a file that gives no chunk, such as an empty text file.
-8. `encodeChunks()` writes `<hash>.mp4` and `<hash>.json` in the index folder.
-9. `_recordIndex()` stores the metadata under the hash, writes `file_metadata.json`, and returns the result.
+8. For a code type with `preserve_lines`, `chunkCodeWithLines()` builds the chunks. For other files, `chunkText()` builds them.
+9. `encodeChunks()` writes `<hash>.mp4` and `<hash>.json` in the index folder.
+10. `_recordIndex()` stores the metadata under the hash, writes `file_metadata.json`, and returns the result.
 
 ### index_directory
 

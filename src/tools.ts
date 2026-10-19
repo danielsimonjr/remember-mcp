@@ -417,7 +417,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
    * The function returns `permission_denied` for a dotfile or a binary file.
    * The function returns `permission_denied` for a file that is not valid UTF-8.
    * The function returns `permission_denied` for a file over the size limit.
-   * The function returns `invalid_argument` for an empty file that the indexer splits into windows.
+   * The function returns `invalid_argument` for an empty file.
    */
   async index_file(raw) {
     const indexer = await agetFileIndexer();

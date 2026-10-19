@@ -139,8 +139,6 @@ function splitsSurrogatePair(content: string, index: number): boolean {
 // With an overlap one below `chunkSize`, a chunk whose end moved early can end where the chunk before it ended.
 // It adds no text, so the function drops it.
 function chunkText(content: string, chunkSize: number, overlap: number): string[] {
-  // An empty text has nothing to index. With no chunk, `indexFile` refuses the file and names it.
-  if (content.length === 0) return [];
   if (content.length <= chunkSize) return [content];
   const chunks: string[] = [];
   let start = 0;
@@ -338,6 +336,12 @@ export class FileIndexer {
       );
     }
 
+    // An empty file has nothing to index. Every empty file has the same hash, so the check comes before the hash
+    // lookup: an index that holds that hash from an earlier version must not answer `already_indexed`.
+    if (fileSize === 0) {
+      throw new Error(`No indexable content in ${resolved}`);
+    }
+
     const fileHash = this._computeFileHash(resolved);
     const fileType = this._getFileType(resolved);
     const existing = this.metadata[fileHash];
@@ -385,10 +389,6 @@ export class FileIndexer {
       chunksMeta = split.meta;
     } else {
       chunks = chunkText(content, chunkSize, overlap);
-    }
-
-    if (chunks.length === 0) {
-      throw new Error(`No indexable content in ${resolved}`);
     }
 
     const videoPath = join(this.indexDir, `${fileHash}.mp4`);
