@@ -208,7 +208,7 @@ All paths are relative to the working directory of the server process. The MCP c
 - `engines` requires Bun at version 1.4.2 or later. `packageManager` pins Bun, and the lock file is `bun.lock`.
 - The scripts are `start`, `dev` (watch mode), `test` (`bun test`) and `typecheck` (`tsc --noEmit`). The `prepublishOnly` script runs the type check and the tests.
 - `tsconfig.json` sets `strict`, `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax` and `noEmit`. The config covers `src/` and `tests/`.
-- The CI workflow runs on Ubuntu and on Windows. Each job installs `ffmpeg`, runs `bun install --frozen-lockfile`, the type check and the tests. The workflow pins the Bun version and the action versions.
+- The CI workflow runs on Ubuntu and on Windows. Each job installs `ffmpeg`, runs `bun install --frozen-lockfile`, the type check and the tests. The Windows job runs `ffmpeg -version` after the install and tries the install up to three times, because `choco` exits 0 when its feed is down. The workflow pins the Bun version and the action versions.
 - Two more workflows handle Dependabot pull requests: one merges them, and one refreshes the lock file.
 
 ## Performance

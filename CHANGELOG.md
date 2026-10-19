@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
   packages"). The job went on without ffmpeg, and `bun test` failed 57 tests, with errors that do
   not name the cause. The step now runs `ffmpeg -version` after the install, and tries the pair up
   to three times with a pause of 20 s. If ffmpeg still does not run, the step fails and says so.
+  The CI paragraph of `docs/architecture/ARCHITECTURE.md` describes the step.
 
 - **`embed()` gives a text in a script other than ASCII a vector of its own.** The tokenizer kept only ASCII
   words of two characters or more. Every other text got one vector (1 in the first slot), so a query in
