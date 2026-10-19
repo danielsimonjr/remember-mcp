@@ -6,6 +6,24 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **A QR frame now holds at most 800 UTF-8 bytes, not 800 characters, so long CJK and emoji
+  text can be archived and indexed.** `splitForQr` cut each chunk into slices of 800
+  UTF-16 units. A QR frame at error correction level M holds 2331 bytes, so 800 characters of
+  three bytes each (2400 bytes) made the `qrcode` package throw `The amount of data is too big
+  to be stored in a QR Code`. `archive_memories` then returned zero counts and kept the rows,
+  so one memory of more than 777 CJK characters blocked every pass that selected it, and
+  `index_file` failed for CJK text at the default `chunk_size` of 1024. A cut at 800 units
+  could also fall inside a surrogate pair, and the package throws `URIError: String contained
+  an illegal UTF-16 sequence` on a lone surrogate, so emoji text failed too. The slice budget
+  is now 800 UTF-8 bytes, and a cut falls only between two code points. ASCII text keeps
+  slices of 800 characters. Text of two-byte characters gets more frames than before: 800
+  characters of `é` were one frame and are now two, so `video_size` and `compression_ratio`
+  of such an archive change. Ten new tests in `tests/video.test.ts` and
+  `tests/file-indexing.test.ts`: eight fail on the old code, and two pass on both (the ASCII
+  frame sizes, which stay as they were). Each of 13 mutations of `splitForQr` fails at least
+  one test. A chunk that already holds a lone surrogate still fails: the file chunker can
+  make one, and that is a separate item.
+
 - **`scheduler_control` with `run_now` now answers `Scheduler not started` before the
   scheduler has started.** The server builds its scheduler with `enabled` set to false, and
   `runNow` returned at once while `enabled` was false. The tool still answered `Archival

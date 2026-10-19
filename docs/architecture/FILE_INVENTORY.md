@@ -46,7 +46,7 @@ This report lists each source file that the map census finds, with a disposition
 | `src/example.ts` | remember-mcp | src | orphan | 97 |
 | `src/index.ts` | remember-mcp | src | build-entry | 38 |
 | `src/remember/active-store.ts` | remember-mcp | src | reachable | 301 |
-| `src/remember/archive.ts` | remember-mcp | src | reachable | 220 |
+| `src/remember/archive.ts` | remember-mcp | src | reachable | 233 |
 | `src/remember/embeddings.ts` | remember-mcp | src | reachable | 82 |
 | `src/remember/ensure-dir.ts` | remember-mcp | src | reachable | 29 |
 | `src/remember/file-indexer.ts` | remember-mcp | src | reachable | 626 |
@@ -62,7 +62,7 @@ This report lists each source file that the map census finds, with a disposition
 | `tests/archive-names.test.ts` | (root) | tests | test | 149 |
 | `tests/bare-paths.test.ts` | (root) | tests | test | 155 |
 | `tests/ensure-dir.test.ts` | (root) | tests | test | 51 |
-| `tests/file-indexing.test.ts` | (root) | tests | test | 301 |
+| `tests/file-indexing.test.ts` | (root) | tests | test | 322 |
 | `tests/mcp-stdio.ts` | (root) | tests | test | 141 |
 | `tests/protocol.test.ts` | (root) | tests | test | 104 |
 | `tests/recall.test.ts` | (root) | tests | test | 85 |
@@ -70,7 +70,7 @@ This report lists each source file that the map census finds, with a disposition
 | `tests/tool-contract.test.ts` | (root) | tests | test | 32 |
 | `tests/tool-handlers.test.ts` | (root) | tests | test | 590 |
 | `tests/version.test.ts` | (root) | tests | test | 11 |
-| `tests/video.test.ts` | (root) | tests | test | 63 |
+| `tests/video.test.ts` | (root) | tests | test | 182 |
 
 ## Skipped links
 

@@ -10,9 +10,9 @@
 - **Dormant files**: 1
   - **Orphaned (reachable from nothing)**: 1
   - **Test-only (only a test reaches them)**: 0
-- **Potentially unused exports**: 15
+- **Potentially unused exports**: 14
   - **Unreferenced anywhere**: 2
-  - **Referenced in their own module**: 13
+  - **Referenced in their own module**: 12
   - **Not classified**: 0
 
 ## Caveats
@@ -58,7 +58,7 @@ No other file imports these names, and their own module does not use them.
 No other file imports these names, but their own module uses them.
 
 - `src/remember/active-store.ts`: `ActiveMemoryRow`, `AddMemoryResult`
-- `src/remember/archive.ts`: `ArchiveChunk`, `ArchiveSidecar`, `EncodeResult`, `loadSidecar`, `removeArchiveOutputs`
+- `src/remember/archive.ts`: `ArchiveChunk`, `ArchiveSidecar`, `EncodeResult`, `removeArchiveOutputs`
 - `src/remember/embeddings.ts`: `EMBED_DIM`
 - `src/remember/file-indexer.ts`: `FileIndexerOptions`
 - `src/remember/system.ts`: `MAX_CONTENT_CHARS`, `MAX_QUERY_K`, `RememberSystemOptions`
