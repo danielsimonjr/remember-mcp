@@ -9,7 +9,7 @@
 | Metric | Count |
 |--------|-------|
 | Total Source Files | 15 |
-| Total Test Files | 11 |
+| Total Test Files | 12 |
 | Source Files with Tests | 9 |
 | Source Files without Tests | 6 |
 | Coverage (raw, direct-import) | **60.0%** |
@@ -62,5 +62,6 @@ The following 6 source files are not directly imported by any test file:
 | `tests/recall.test.ts` | 1 files |
 | `tests/scheduler.test.ts` | 2 files |
 | `tests/tool-contract.test.ts` | 1 files |
+| `tests/tool-handlers.test.ts` | 0 files |
 | `tests/version.test.ts` | 6 files |
 | `tests/video.test.ts` | 2 files |

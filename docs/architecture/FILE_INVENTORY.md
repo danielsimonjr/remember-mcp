@@ -8,7 +8,7 @@ This report lists each source file that the map census finds, with a disposition
 
 **Language**: typescript
 
-**Total files**: 27
+**Total files**: 28
 
 ## Disposition counts
 
@@ -18,25 +18,25 @@ This report lists each source file that the map census finds, with a disposition
 | `build-entry` | 3 | A `src`-area file that is an entry root. |
 | `test-only` | 0 | A `src`-area file that only a test reaches. |
 | `orphan` | 1 | A `src`-area file that nothing reaches. Delete it, or wire it to a root. |
-| `test` | 12 | A file in a `tests/` folder, or a `*.test.ts` or `*.spec.ts` file. |
+| `test` | 13 | A file in a `tests/` folder, or a `*.test.ts` or `*.spec.ts` file. |
 | `tool` | 0 | A file in a `tools/` or `scripts/` folder outside `src/`. |
 | `config` | 0 | A `*.config.*` file of TypeScript or JavaScript. |
 | `example` | 0 | A file in `examples/` or `docs/`. |
 | `bench` | 0 | A file in `bench/` or `benchmarks/`, or a `*.bench.*` file. |
-| **Total** | **27** | |
+| **Total** | **28** | |
 
 ## Per-area counts
 
 | Area | Files |
 | --- | --: |
 | `src` | 15 |
-| `tests` | 12 |
+| `tests` | 13 |
 
 ## Per-package counts
 
 | Package | Files |
 | --- | --: |
-| `(root)` | 12 |
+| `(root)` | 13 |
 | `remember-mcp` | 15 |
 
 ## All files
@@ -63,11 +63,12 @@ This report lists each source file that the map census finds, with a disposition
 | `tests/bare-paths.test.ts` | (root) | tests | test | 155 |
 | `tests/ensure-dir.test.ts` | (root) | tests | test | 51 |
 | `tests/file-indexing.test.ts` | (root) | tests | test | 301 |
-| `tests/mcp-stdio.ts` | (root) | tests | test | 81 |
+| `tests/mcp-stdio.ts` | (root) | tests | test | 141 |
 | `tests/protocol.test.ts` | (root) | tests | test | 104 |
 | `tests/recall.test.ts` | (root) | tests | test | 85 |
 | `tests/scheduler.test.ts` | (root) | tests | test | 181 |
 | `tests/tool-contract.test.ts` | (root) | tests | test | 32 |
+| `tests/tool-handlers.test.ts` | (root) | tests | test | 590 |
 | `tests/version.test.ts` | (root) | tests | test | 11 |
 | `tests/video.test.ts` | (root) | tests | test | 63 |
 

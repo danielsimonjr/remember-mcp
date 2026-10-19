@@ -370,6 +370,6 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 27 | repo-tools map (whole repository) |
-| totalExports | 58 | repo-tools map (whole repository) |
+| totalSourceFiles | 28 | repo-tools map (whole repository) |
+| totalExports | 61 | repo-tools map (whole repository) |
 | runtimeCircularDeps | 0 | repo-tools map (whole repository) |
