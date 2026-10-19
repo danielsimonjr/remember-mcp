@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **The Windows CI job fails at the ffmpeg install step when ffmpeg is missing.** `choco install
+  ffmpeg -y` exits 0 when it cannot reach its feed ("Unable to find package", "installed 0/0
+  packages"). The job went on without ffmpeg, and `bun test` failed 57 tests, with errors that do
+  not name the cause. The step now runs `ffmpeg -version` after the install, and tries the pair up
+  to three times with a pause of 20 s. If ffmpeg still does not run, the step fails and says so.
+
 - **`embed()` gives a text in a script other than ASCII a vector of its own.** The tokenizer kept only ASCII
   words of two characters or more. Every other text got one vector (1 in the first slot), so a query in
   Chinese, Japanese, Thai, Russian, Greek or Korean ranked all memories in that script equal, and the cosine
