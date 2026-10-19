@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **The text chunker no longer keeps a chunk that adds no text.** With an `overlap` one below
+  `chunk_size`, a window can start one unit after the last kept window. If the end of that
+  window then moves one unit early to avoid a surrogate pair, it can end where the last window
+  ended. It then holds only text that the last window holds. The entry below made that case
+  possible. The chunker now drops a window that does not end after the last kept window. For
+  any other `overlap` the chunks stay the same, because a window then ends at least one unit
+  after the last window. The coverage test of an astral text now also asserts that each chunk
+  ends after the one before it. It runs two more sizes and a third prefix length. A new test
+  pins that this overlap drops no window of a text without surrogates. Each of 10 mutations of
+  the guard fails at least one test. Of the 14 mutations of the chunker in the entry below, 12
+  still fail at least one test and 2 loop for ever.
+
 - **The file chunker no longer cuts inside a surrogate pair, so `index_file` no longer throws
   `URIError` and `index_directory` no longer lists the file in `errors`, for text with emoji
   or other characters above U+FFFF.** `chunkText` cut windows of `chunk_size` UTF-16 units
