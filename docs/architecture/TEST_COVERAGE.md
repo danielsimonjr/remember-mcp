@@ -37,7 +37,7 @@ The following 6 source files are not directly imported by any test file:
 
 | Source File | Test Files |
 |-------------|------------|
-| `remember/archive.ts` | `video.test.ts` |
+| `remember/archive.ts` | `file-indexing.test.ts`, `video.test.ts` |
 | `remember/ensure-dir.ts` | `ensure-dir.test.ts` |
 | `remember/file-indexer.ts` | `file-indexing.test.ts`, `version.test.ts` |
 | `remember/index.ts` | `version.test.ts` |
@@ -57,7 +57,7 @@ The following 6 source files are not directly imported by any test file:
 | `tests/archive-names.test.ts` | 1 files |
 | `tests/bare-paths.test.ts` | 0 files |
 | `tests/ensure-dir.test.ts` | 1 files |
-| `tests/file-indexing.test.ts` | 1 files |
+| `tests/file-indexing.test.ts` | 2 files |
 | `tests/protocol.test.ts` | 0 files |
 | `tests/recall.test.ts` | 1 files |
 | `tests/scheduler.test.ts` | 2 files |
