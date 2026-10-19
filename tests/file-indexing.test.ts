@@ -3,6 +3,7 @@ import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/server";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { loadSidecar } from "../src/remember/archive.ts";
 import { FileIndexer } from "../src/remember/file-indexer.ts";
 import { sendJsonRpc, spawnServer } from "./mcp-stdio.ts";
 
@@ -98,6 +99,112 @@ describe("file indexing", () => {
     expect(indexer.search({ query: "漢", top_k: 5 })).toHaveLength(4);
     indexer.close();
   }, 120_000);
+
+  describe("chunk boundaries and surrogate pairs", () => {
+    // `Buffer` turns a lone surrogate into U+FFFD, so a well-formed string is one that comes back unchanged.
+    function wellFormed(text: string) {
+      return Buffer.from(text, "utf8").toString("utf8") === text;
+    }
+
+    // A text of distinct astral code points: every chunk occurs once, so `indexOf` gives its start.
+    function astral(count: number) {
+      return Array.from({ length: count }, (_, i) => String.fromCodePoint(0x1f600 + i)).join("");
+    }
+
+    async function chunksOf(content: string, opts: { chunk_size?: number; overlap?: number } = {}) {
+      const root = tmp();
+      const docs = join(root, "docs");
+      mkdirSync(docs, { recursive: true });
+      const filePath = join(docs, "text.txt");
+      writeFileSync(filePath, content);
+      const indexDir = join(root, "index");
+      const indexer = new FileIndexer({ index_dir: indexDir, allowed_roots: [docs] });
+      try {
+        const result = await indexer.indexFile({ file_path: filePath, ...opts });
+        const sidecar = loadSidecar(join(indexDir, `${String(result.file_hash)}.json`));
+        return sidecar!.chunks.map((chunk) => chunk.text);
+      } finally {
+        indexer.close();
+      }
+    }
+
+    // The chunks of a text of distinct code points must start in order, leave no gap, and reach the end.
+    function expectCoverage(content: string, chunks: string[], chunkSize: number) {
+      let previousStart = -1;
+      let reached = 0;
+      for (const chunk of chunks) {
+        const start = content.indexOf(chunk);
+        expect(start).toBeGreaterThan(previousStart);
+        expect(start).toBeLessThanOrEqual(reached);
+        expect(chunk.length).toBeLessThanOrEqual(chunkSize);
+        expect(wellFormed(chunk)).toBe(true);
+        previousStart = start;
+        reached = start + chunk.length;
+      }
+      expect(reached).toBe(content.length);
+    }
+
+    test("keeps an emoji whole when it crosses the end of a chunk", async () => {
+      // The first cut falls at unit 1024, between the two units of the emoji at units 1023 and 1024.
+      const content = "a".repeat(1023) + "\u{1F600}" + "b".repeat(2000);
+      const chunks = await chunksOf(content);
+      expect(chunks.every(wellFormed)).toBe(true);
+      expect(chunks.every((chunk) => chunk.length <= 1024)).toBe(true);
+      expect(chunks[0]).toBe("a".repeat(1023));
+      expect(chunks.some((chunk) => chunk.includes("\u{1F600}"))).toBe(true);
+    }, 120_000);
+
+    test("starts the next chunk after the pair when the overlap lands inside it", async () => {
+      // The first chunk ends at unit 64, so the next one would start at unit 56, between the two units of the emoji at units 55 and 56.
+      const content = "a".repeat(55) + "\u{1F600}" + "b".repeat(300);
+      const chunks = await chunksOf(content, { chunk_size: 64, overlap: 8 });
+      expect(chunks.every(wellFormed)).toBe(true);
+      expect(chunks[0]).toBe("a".repeat(55) + "\u{1F600}" + "b".repeat(7));
+      expect(chunks[1]!.startsWith("b")).toBe(true);
+    }, 120_000);
+
+    test("keeps the pairs at both ends of the surrogate range whole", async () => {
+      // U+10000 is the units D800 DC00 and U+10FFFF is the units DBFF DFFF. Each one sits across the first cut.
+      for (const char of ["\u{10000}", "\u{10FFFF}"]) {
+        const chunks = await chunksOf("a".repeat(1023) + char + "b".repeat(100));
+        expect(chunks[0]).toBe("a".repeat(1023));
+        expect(chunks.every(wellFormed)).toBe(true);
+        expect(chunks.some((chunk) => chunk.includes(char))).toBe(true);
+      }
+    }, 120_000);
+
+    test("covers a text of astral characters without a gap, whatever the sizes and the start parity", async () => {
+      const cases = [
+        { chunk_size: 101, overlap: 10, count: 600 },
+        { chunk_size: 100, overlap: 9, count: 600 },
+        { chunk_size: 33, overlap: 0, count: 600 },
+        { chunk_size: 32, overlap: 1, count: 600 },
+        // An overlap one below the size makes the next start fall back to start + 1, so each chunk adds one or two units.
+        { chunk_size: 33, overlap: 32, count: 30 },
+        { chunk_size: 32, overlap: 31, count: 30 },
+      ];
+      for (const prefix of ["", "x"]) {
+        for (const { count, ...opts } of cases) {
+          const content = prefix + astral(count);
+          expectCoverage(content, await chunksOf(content, opts), opts.chunk_size);
+        }
+      }
+    }, 120_000);
+
+    test("keeps the chunk boundaries of a text without surrogates", async () => {
+      // 3000 distinct BMP characters at the default chunk_size 1024 and overlap 128: starts 0, 896, 1792 and 2688.
+      // The units before the first cuts sit at the edges of the surrogate range: U+D7FF before unit 896, U+FFFF before
+      // unit 1024 and U+E000 before unit 1920. None of them is half of a pair, so no cut moves.
+      const units = Array.from({ length: 3000 }, (_, i) => String.fromCharCode(0x4e00 + i));
+      units[895] = "\ud7ff";
+      units[1023] = "\uffff";
+      units[1919] = "\ue000";
+      const content = units.join("");
+      const chunks = await chunksOf(content);
+      expect(chunks.map((chunk) => content.indexOf(chunk))).toEqual([0, 896, 1792, 2688]);
+      expect(chunks.map((chunk) => chunk.length)).toEqual([1024, 1024, 1024, 312]);
+    }, 120_000);
+  });
 
   describe("line_info on search hits", () => {
     // A code file of 30 lines. The default chunk_size 1024 gives 20 lines per chunk, so the

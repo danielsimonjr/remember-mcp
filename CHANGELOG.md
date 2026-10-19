@@ -6,6 +6,23 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **The file chunker no longer cuts inside a surrogate pair, so `index_file` and
+  `index_directory` no longer throw `URIError` on text with emoji or other characters above
+  U+FFFF.** `chunkText` cut windows of `chunk_size` UTF-16 units with `slice`. A cut between
+  the two halves of a pair left a lone surrogate at the end of one chunk and at the start of
+  the next, and the `qrcode` package throws `URIError: String contained an illegal UTF-16
+  sequence` on a lone surrogate. The start of the next window, `end - overlap`, could fall
+  inside a pair too. A window that would end inside a pair now ends one unit early, and a
+  window that would start inside a pair now starts one unit late. A chunk never holds more
+  than `chunk_size` units, and the overlap never grows. Every file that indexed before has no
+  cut inside a pair, so neither adjustment applies to it and its chunks are the same. This
+  closes the separate item that the entry below names. `chunkCodeWithLines` cuts at line
+  breaks and is not changed. Five new tests in `tests/file-indexing.test.ts`: four fail on
+  the old code with `URIError`, and one (the boundaries of a text without surrogates) passes
+  on both. Each of 14 mutations of the chunker fails at least one test. A memory does not
+  carry a lone surrogate to the QR step: measured with `bun:sqlite`, the content reads back
+  with U+FFFD in its place, and the archive pass succeeds.
+
 - **A QR frame now holds at most 800 UTF-8 bytes, not 800 characters, so long CJK and emoji
   text can be archived and indexed.** `splitForQr` cut each chunk into slices of 800
   UTF-16 units. A QR frame at error correction level M holds 2331 bytes, so 800 characters of

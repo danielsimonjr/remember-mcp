@@ -127,15 +127,26 @@ function chunkCodeWithLines(
   return { chunks, meta };
 }
 
+// A cut at `index` splits a surrogate pair when a high surrogate is before it and a low surrogate is after it.
+// `codePointAt` joins such a pair into one code point above 0xFFFF. Each half would be a lone surrogate,
+// and the QR library throws on one.
+function splitsSurrogatePair(content: string, index: number): boolean {
+  return (content.codePointAt(index - 1) ?? 0) > 0xffff;
+}
+
+// A chunk that would end inside a pair ends one unit early, and a chunk that would start inside a pair
+// starts one unit late. So a chunk never holds more than `chunkSize` units and the overlap never grows.
 function chunkText(content: string, chunkSize: number, overlap: number): string[] {
   if (content.length <= chunkSize) return [content];
   const chunks: string[] = [];
   let start = 0;
   while (start < content.length) {
-    const end = Math.min(start + chunkSize, content.length);
+    let end = Math.min(start + chunkSize, content.length);
+    if (splitsSurrogatePair(content, end)) end -= 1;
     chunks.push(content.slice(start, end));
     if (end >= content.length) break;
     start = Math.max(end - overlap, start + 1);
+    if (splitsSurrogatePair(content, start)) start += 1;
   }
   return chunks;
 }
