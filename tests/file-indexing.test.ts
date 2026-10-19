@@ -378,13 +378,62 @@ describe("file indexing", () => {
     }, 120_000);
   });
 
+  describe("a file with no text", () => {
+    function setup() {
+      const root = tmp();
+      const docs = join(root, "docs");
+      mkdirSync(docs, { recursive: true });
+      const indexer = new FileIndexer({ index_dir: join(root, "index"), allowed_roots: [docs] });
+      return { docs, indexer };
+    }
+
+    test("an empty file is refused with a message that names the file, and nothing is recorded", async () => {
+      const { docs, indexer } = setup();
+      const filePath = join(docs, "empty.txt");
+      writeFileSync(filePath, "");
+
+      const refusal = indexer.indexFile({ file_path: filePath });
+      await expect(refusal).rejects.toThrow("No indexable content in");
+      await expect(refusal).rejects.toThrow("empty.txt");
+      expect(indexer.listIndexedFiles()).toEqual([]);
+      indexer.close();
+    }, 120_000);
+
+    test("a file of one space is still indexed", async () => {
+      const { docs, indexer } = setup();
+      const filePath = join(docs, "space.txt");
+      writeFileSync(filePath, " ");
+
+      const result = await indexer.indexFile({ file_path: filePath });
+      expect(result.status).toBe("indexed");
+      expect(result.chunk_count).toBe(1);
+      indexer.close();
+    }, 120_000);
+
+    test("a directory run records the empty file as an error and indexes the others", async () => {
+      const { docs, indexer } = setup();
+      writeFileSync(join(docs, "good.txt"), "a plain ASCII file about the retention policy\n");
+      writeFileSync(join(docs, "empty.txt"), "");
+
+      const result = await indexer.indexDirectory({ dir_path: docs });
+      expect(result.indexed_count).toBe(1);
+      expect(result.error_count).toBe(1);
+      const errors = result.errors as Array<{ file: string; error: string }>;
+      expect(errors[0]!.file).toContain("empty.txt");
+      expect(errors[0]!.error).toContain("No indexable content in");
+      indexer.close();
+    }, 120_000);
+  });
+
   describe("index_file over MCP", () => {
-    test("a Latin-1 file answers permission_denied, and a valid file is still indexed", async () => {
+    test("a Latin-1 file answers permission_denied, an empty file answers invalid_argument, and a valid file is still indexed", async () => {
       const cwd = tmp();
       const docs = join(cwd, "docs");
       mkdirSync(docs, { recursive: true });
       const latin1 = join(docs, "latin1.txt");
       writeFileSync(latin1, Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x20, 0x6f, 0x6b]));
+      const empty = join(docs, "empty.txt");
+      writeFileSync(empty, "");
       const valid = join(docs, "valid.txt");
       writeFileSync(valid, "a plain ASCII file about the retention policy\n");
 
@@ -427,6 +476,11 @@ describe("file indexing", () => {
         expect(refused.error).toBe("permission_denied");
         expect(String(refused.message)).toContain("Refusing to index non-UTF-8 file:");
         expect(String(refused.message)).toContain("latin1.txt");
+
+        const noText = (await call("index_file", { file_path: empty })) as Record<string, unknown>;
+        expect(noText.error).toBe("invalid_argument");
+        expect(String(noText.message)).toContain("No indexable content in");
+        expect(String(noText.message)).toContain("empty.txt");
 
         const accepted = (await call("index_file", { file_path: valid })) as Record<string, unknown>;
         expect(accepted.status).toBe("indexed");

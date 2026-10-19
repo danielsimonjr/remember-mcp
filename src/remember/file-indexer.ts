@@ -139,6 +139,8 @@ function splitsSurrogatePair(content: string, index: number): boolean {
 // With an overlap one below `chunkSize`, a chunk whose end moved early can end where the chunk before it ended.
 // It adds no text, so the function drops it.
 function chunkText(content: string, chunkSize: number, overlap: number): string[] {
+  // An empty text has nothing to index. With no chunk, `indexFile` refuses the file and names it.
+  if (content.length === 0) return [];
   if (content.length <= chunkSize) return [content];
   const chunks: string[] = [];
   let start = 0;

@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **`index_file` on an empty text file now names the cause.** The text chunker returned one
+  empty chunk for an empty text, so the QR library threw `No input text`, and the call answered
+  `invalid_argument` with that message. The chunker now returns no chunk for an empty text. The
+  check for a file with no chunk was already in `indexFile`. It now runs for an empty file and
+  throws `No indexable content in <path>`. The call still answers `invalid_argument`, and a
+  directory run lists the file in `errors` with the new message. Every file that indexed before
+  indexes as before. An empty code file with `preserve_lines` true still indexes its header
+  chunk. Tests cover the file, the directory run and the answer over MCP. One more test pins
+  that a file of one space is still indexed.
+
 - **The text chunker no longer keeps a chunk that adds no text.** With an `overlap` one below
   `chunk_size`, a window can start one unit after the last kept window. If the end of that
   window then moves one unit early to avoid a surrogate pair, it can end where the last window
