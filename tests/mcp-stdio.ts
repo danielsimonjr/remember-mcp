@@ -35,34 +35,97 @@ export function spawnServer(cwd: string = REPO, env: Record<string, string> = {}
   return { proc, stdin: proc.stdin as StdinSink, stdout: proc.stdout };
 }
 
+/**
+ * How long `sendJsonRpc` waits for a reply, unless the caller gives another limit. It stays under the 120 s that a
+ * slow test may run (an ffmpeg encode on a CI runner), so a server that never answers fails its call first.
+ */
+const REPLY_TIMEOUT_MS = 100_000;
+
+/**
+ * The lines of one server's stdout. One instance reads the whole session, so a line that arrives with the line
+ * before it is kept for the next request, and a read that outlives its deadline is not lost.
+ */
+class LineReader {
+  private readonly read: () => Promise<{ done: boolean; value?: Uint8Array }>;
+  private readonly decoder = new TextDecoder();
+  private buf = "";
+  private pending: ReturnType<LineReader["read"]> | null = null;
+  private ended = false;
+  /** True while a request waits for its reply: two callers of `next` would each append the chunk of one read. */
+  busy = false;
+
+  constructor(stream: ReadableStream<Uint8Array>) {
+    const reader = stream.getReader();
+    this.read = () => reader.read();
+  }
+
+  /** The next line, or null when the stream has ended or `deadline` (a `Date.now()` value) has passed. */
+  async next(deadline: number): Promise<string | null> {
+    for (;;) {
+      const nl = this.buf.indexOf("\n");
+      if (nl >= 0) {
+        const line = this.buf.slice(0, nl);
+        this.buf = this.buf.slice(nl + 1);
+        return line;
+      }
+      const remaining = deadline - Date.now();
+      if (this.ended || remaining <= 0) return null;
+      // A read that loses the race stays in `pending`, and the next call waits for the same read.
+      this.pending ??= this.read();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const expired = new Promise<null>((resolve) => {
+        timer = setTimeout(resolve, remaining, null);
+      });
+      try {
+        const chunk = await Promise.race([this.pending, expired]);
+        if (chunk === null) return null;
+        this.pending = null;
+        if (chunk.done) this.ended = true;
+        else this.buf += this.decoder.decode(chunk.value, { stream: true });
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  }
+}
+
+const lineReaders = new WeakMap<ServerProc, LineReader>();
+
+/**
+ * Send one request and return the reply with the same id, or null when the stream ends or `timeoutMs` passes.
+ * Every other message is read and skipped: a notification, a request from the server, a reply to an earlier request.
+ * A line that is not JSON throws, because the server writes nothing but protocol messages to stdout.
+ * One request waits on a server at a time, because the reply to any other request would be skipped.
+ */
 export async function sendJsonRpc(
   server: ServerProc,
   message: Record<string, unknown>,
+  timeoutMs: number = REPLY_TIMEOUT_MS,
 ): Promise<Record<string, unknown> | null> {
-  const payload = JSON.stringify(message) + "\n";
-  server.stdin.write(payload);
-  await server.stdin.flush();
-
-  const reader = server.stdout.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  const deadline = Date.now() + 10_000;
+  const id = message.id;
+  if (id === undefined) throw new Error("sendJsonRpc needs a request id: a message with no id gets no reply");
+  let lines = lineReaders.get(server);
+  if (!lines) {
+    lines = new LineReader(server.stdout);
+    lineReaders.set(server, lines);
+  }
+  if (lines.busy) throw new Error("sendJsonRpc: another request is still waiting for its reply on this server");
+  lines.busy = true;
   try {
-    while (Date.now() < deadline) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const nl = buf.indexOf("\n");
-      if (nl >= 0) {
-        const line = buf.slice(0, nl).trim();
-        if (!line) return null;
-        return JSON.parse(line) as Record<string, unknown>;
-      }
+    server.stdin.write(JSON.stringify(message) + "\n");
+    await server.stdin.flush();
+
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const line = await lines.next(deadline);
+      if (line === null) return null;
+      if (!line.trim()) continue;
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      if (parsed.id === id && !("method" in parsed)) return parsed;
     }
   } finally {
-    reader.releaseLock();
+    lines.busy = false;
   }
-  return null;
 }
 
 export async function exchange(
