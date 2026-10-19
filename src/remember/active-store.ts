@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import {
   blobToEmbedding,
   cosine,
+  currentVector,
   embed,
   embeddingToBlob,
 } from "./embeddings.ts";
@@ -177,7 +178,8 @@ export class ActiveStore {
 
       const lastSeen = Number(raw.last_seen_at);
       const salience = decaySalience(Number(raw.salience), lastSeen, now);
-      const emb = blobToEmbedding(raw.embedding as Buffer);
+      // A row written before embed() read non-ASCII text holds the vector that ranks all such rows equal.
+      const emb = currentVector(blobToEmbedding(raw.embedding as Buffer), String(raw.content));
       const sim = cosine(qVec, emb);
       // Blend similarity with salience so fresh/important memories rise.
       const score = sim * 0.85 + salience * 0.15;

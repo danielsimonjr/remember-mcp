@@ -57,10 +57,10 @@ The write lock covers the insert and nothing else.
 1. `HANDLERS.query_memory` calls `RememberSystem.query()`.
 2. `query()` verifies the query is not empty. `query()` also verifies that `k` is an integer from 1 to 100. The default value for `k` is 10.
 3. `ActiveStore.query()` embeds the query and reads the rows of the owner, or all rows without an owner.
-4. The method drops rows that have none of the requested sectors. For each row, the method computes the decayed salience and a score of `0.85 × similarity + 0.15 × salience`.
+4. The method drops rows that have none of the requested sectors. For each row, the method reads the stored vector through `currentVector()`, computes the decayed salience and a score of `0.85 × similarity + 0.15 × salience`.
 5. The method sorts the rows, keeps the first `k`, and updates `last_seen_at` and `salience` of those rows in one transaction.
 6. The method runs `_queryArchives()` for each archive of the key of the owner. The call happens only when `include_archive` is not false and the archive index has that key.
-7. For each archive, `searchSidecar()` reads the JSON sidecar, embeds the query, scores every chunk, and returns the best `k`. `_queryArchives()` multiplies each score by 0.8 and builds a result with the location `archive`.
+7. For each archive, `searchSidecar()` reads the JSON sidecar, embeds the query, scores every chunk against `currentVector()` of its stored embedding, and returns the best `k`. `_queryArchives()` multiplies each score by 0.8 and builds a result with the location `archive`.
 8. `query()` sorts the active and archive hits together and returns the first `k`.
 
 An archive that fails to read is logged to standard error and skipped.
@@ -203,5 +203,5 @@ The claims come from `repo-tools map .`, which reads the whole repository. A dir
 
 | Claim | Value | Source |
 |---|---|---|
-| totalSourceFiles | 29 | repo-tools map (whole repository) |
+| totalSourceFiles | 30 | repo-tools map (whole repository) |
 | entryRoots | 3 | repo-tools map (whole repository) |

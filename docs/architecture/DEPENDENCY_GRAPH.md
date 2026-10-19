@@ -135,7 +135,7 @@ The codebase is organized into the following modules:
 | File | Imports | Type |
 |------|---------|------|
 | `./ensure-dir.ts` | `ensureDir` | Import |
-| `./embeddings.ts` | `blobToEmbedding, cosine, embed, embeddingToBlob` | Import |
+| `./embeddings.ts` | `blobToEmbedding, cosine, currentVector, embed, embeddingToBlob` | Import |
 | `./sectors.ts` | `classifySectors` | Import |
 | `./types.ts` | `SectorType` | Import (type-only) |
 
@@ -163,7 +163,7 @@ The codebase is organized into the following modules:
 **Internal Dependencies:**
 | File | Imports | Type |
 |------|---------|------|
-| `./embeddings.ts` | `cosine, embed` | Import |
+| `./embeddings.ts` | `cosine, currentVector, embed` | Import |
 | `./ensure-dir.ts` | `ensureDir` | Import |
 
 **Exports:**
@@ -175,7 +175,7 @@ The codebase is organized into the following modules:
 ### `src/remember/embeddings.ts` - Lightweight, dependency-free embedding provider.
 
 **Exports:**
-- Functions: `embed`, `cosine`, `embeddingToBlob`, `blobToEmbedding`
+- Functions: `embed`, `currentVector`, `cosine`, `embeddingToBlob`, `blobToEmbedding`
 
 ---
 
@@ -389,14 +389,14 @@ graph TD
 
 | Category | Count |
 |----------|-------|
-| Total Source Files | 29 |
+| Total Source Files | 30 |
 | Subsystems | 3 |
-| Total Lines of Code | 5346 |
-| Total Exports | 61 |
+| Total Lines of Code | 5695 |
+| Total Exports | 62 |
 | Total Re-exports | 9 |
 | Total Classes | 4 |
 | Total Interfaces | 11 |
-| Total Functions | 19 |
+| Total Functions | 20 |
 | Total Type Guards | 0 |
 | Total Enums | 1 |
 | Type-only Imports | 3 |
