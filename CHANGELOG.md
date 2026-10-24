@@ -17,7 +17,9 @@ All notable changes to this project will be documented in this file.
   `tests/file-indexing.test.ts` cover the drop (the record is gone from the list, from `get_file_info` and from
   `get_stats`, and a real record stays; the file on disk has no such record after the next index; a record of size 0
   under another hash stays) and the order of the refusal of an empty file before the hash lookup. The test of the
-  seeded record now expects the record to be gone and still expects the refusal of an empty file.
+  seeded record now expects the record to be gone and still expects the refusal of an empty file. The two
+  architecture documents that state the line count of the repository now say 5773, `COMPONENTS.md` and `DATAFLOW.md`
+  describe the drop, and the five generated reports in `docs/architecture/` are regenerated with `repo-tools` 2.3.0.
 
 - **The Windows CI job fails at the ffmpeg install step when ffmpeg is missing.** `choco install
   ffmpeg -y` exits 0 when it cannot reach its feed ("Unable to find package", "installed 0/0

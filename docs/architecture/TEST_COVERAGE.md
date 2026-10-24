@@ -21,14 +21,14 @@ The following 5 source files are not directly imported by any test file:
 
 ### root/
 
-- `src/example.ts` → Expected test: `tests/unit/root/example.test.ts`
-- `src/index.ts` → Expected test: `tests/unit/root/index.test.ts`
-- `src/server.ts` → Expected test: `tests/unit/root/server.test.ts`
+- `src/example.ts`
+- `src/index.ts`
+- `src/server.ts`
 
 ### remember/
 
-- `src/remember/active-store.ts` → Expected test: `tests/unit/remember/active-store.test.ts`
-- `src/remember/sectors.ts` → Expected test: `tests/unit/remember/sectors.test.ts`
+- `src/remember/active-store.ts`
+- `src/remember/sectors.ts`
 
 ---
 
