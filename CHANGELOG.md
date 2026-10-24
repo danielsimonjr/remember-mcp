@@ -6,6 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **A file index that an earlier version built no longer keeps the record of an empty file.** Before `index_file`
+  refused a zero-byte file, it stored an empty code file with a header-only chunk, under the SHA-256 that every empty
+  file shares. The tool list has no tool that removes a record, so a persistent `file_index/` kept that record:
+  `list_indexed_files` listed it, `get_file_info` on any empty file returned it, and `search_files` could return its
+  header chunk. `FileIndexer` now drops the record under that empty-file hash when it loads `file_metadata.json`, writes
+  one line to stderr when it does, and the next save writes the drop to the file. A record with a stored size of 0
+  under any other hash stays. The two sidecar files of the record
+  (`<hash>.mp4` and `<hash>.json`) stay in the index folder as unused files. Four new tests in
+  `tests/file-indexing.test.ts` cover the drop (the record is gone from the list, from `get_file_info` and from
+  `get_stats`, and a real record stays; the file on disk has no such record after the next index; a record of size 0
+  under another hash stays) and the order of the refusal of an empty file before the hash lookup. The test of the
+  seeded record now expects the record to be gone and still expects the refusal of an empty file.
+
 - **The Windows CI job fails at the ffmpeg install step when ffmpeg is missing.** `choco install
   ffmpeg -y` exits 0 when it cannot reach its feed ("Unable to find package", "installed 0/0
   packages"). The job went on without ffmpeg, and `bun test` failed 57 tests, with errors that do

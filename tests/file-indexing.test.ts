@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/server";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadSidecar } from "../src/remember/archive.ts";
@@ -419,42 +419,110 @@ describe("file indexing", () => {
       indexer.close();
     }, 120_000);
 
-    test("an index that already holds the hash of an empty file still refuses an empty file", async () => {
+    // The record that an earlier version wrote when it indexed an empty code file. Every empty file hashes to it.
+    const EMPTY_HASH = createHash("sha256").update("").digest("hex");
+    function emptyFileRecord(docs: string, indexDir: string) {
+      return {
+        file_path: join(docs, "old.ts"),
+        file_name: "old.ts",
+        file_hash: EMPTY_HASH,
+        file_type: "typescript",
+        file_size: 0,
+        chunk_count: 1,
+        chunk_size: 1024,
+        overlap: 128,
+        video_path: join(indexDir, `${EMPTY_HASH}.mp4`),
+        index_path: join(indexDir, `${EMPTY_HASH}.json`),
+        chunks_meta: [{ start_line: 1, end_line: 1, char_start: 0, char_end: 1 }],
+        indexed_at: "2026-01-01T00:00:00.000Z",
+        stats: { video_size: 1024, compression_ratio: 1 },
+      };
+    }
+
+    // An index folder that holds one real file and, as an earlier version left it, the record of an empty file.
+    async function seedIndexWithEmptyRecord() {
+      const root = tmp();
+      const docs = join(root, "docs");
+      const indexDir = join(root, "index");
+      mkdirSync(docs, { recursive: true });
+      const real = join(docs, "real.txt");
+      writeFileSync(real, "hello world");
+      const first = new FileIndexer({ index_dir: indexDir, allowed_roots: [docs] });
+      await first.indexFile({ file_path: real });
+      first.close();
+      const metadataFile = join(indexDir, "file_metadata.json");
+      const stored = JSON.parse(readFileSync(metadataFile, "utf8"));
+      stored[EMPTY_HASH] = emptyFileRecord(docs, indexDir);
+      writeFileSync(metadataFile, JSON.stringify(stored));
+      return { docs, indexDir, metadataFile };
+    }
+
+    test("an index that already holds the hash of an empty file drops the record and still refuses an empty file", async () => {
       const root = tmp();
       const docs = join(root, "docs");
       const indexDir = join(root, "index");
       mkdirSync(docs, { recursive: true });
       mkdirSync(indexDir, { recursive: true });
-      // The record that an earlier version wrote when it indexed an empty code file.
-      const emptyHash = createHash("sha256").update("").digest("hex");
-      writeFileSync(
-        join(indexDir, "file_metadata.json"),
-        JSON.stringify({
-          [emptyHash]: {
-            file_path: join(docs, "old.ts"),
-            file_name: "old.ts",
-            file_hash: emptyHash,
-            file_type: "typescript",
-            file_size: 0,
-            chunk_count: 1,
-            chunk_size: 1024,
-            overlap: 128,
-            video_path: join(indexDir, `${emptyHash}.mp4`),
-            index_path: join(indexDir, `${emptyHash}.json`),
-            chunks_meta: [{ start_line: 1, end_line: 1, char_start: 0, char_end: 1 }],
-            indexed_at: "2026-01-01T00:00:00.000Z",
-            stats: { video_size: 1024, compression_ratio: 1 },
-          },
-        }),
-      );
+      writeFileSync(join(indexDir, "file_metadata.json"), JSON.stringify({ [EMPTY_HASH]: emptyFileRecord(docs, indexDir) }));
       const indexer = new FileIndexer({ index_dir: indexDir, allowed_roots: [docs] });
-      expect(indexer.listIndexedFiles()).toHaveLength(1);
+      expect(indexer.listIndexedFiles()).toHaveLength(0);
       for (const name of ["empty.txt", "empty.ts"]) {
         const filePath = join(docs, name);
         writeFileSync(filePath, "");
         await expect(indexer.indexFile({ file_path: filePath })).rejects.toThrow("No indexable content in");
       }
-      expect(indexer.listIndexedFiles()).toHaveLength(1);
+      expect(indexer.listIndexedFiles()).toHaveLength(0);
+      indexer.close();
+    }, 120_000);
+
+    test("an index that holds the record of an empty file drops it when it loads and keeps every other record", async () => {
+      const { docs, indexDir } = await seedIndexWithEmptyRecord();
+      const empty = join(docs, "old.ts");
+      writeFileSync(empty, "");
+      const logged = spyOn(console, "error").mockImplementation(() => {});
+      let indexer: FileIndexer;
+      try {
+        indexer = new FileIndexer({ index_dir: indexDir, allowed_roots: [docs] });
+        expect(logged.mock.calls.flat().join(" ")).toContain("Dropped the record of an empty file");
+      } finally {
+        logged.mockRestore();
+      }
+      expect(indexer.listIndexedFiles().map((f) => f.file_name)).toEqual(["real.txt"]);
+      expect(indexer.getFileInfo(empty)).toBeNull();
+      expect(indexer.getStats().total_files).toBe(1);
+      indexer.close();
+    }, 120_000);
+
+    test("the dropped record is gone from the metadata file after the next index", async () => {
+      const { docs, indexDir, metadataFile } = await seedIndexWithEmptyRecord();
+      const indexer = new FileIndexer({ index_dir: indexDir, allowed_roots: [docs] });
+      const second = join(docs, "second.txt");
+      writeFileSync(second, "another file");
+      await indexer.indexFile({ file_path: second });
+      indexer.close();
+      const stored = JSON.parse(readFileSync(metadataFile, "utf8")) as Record<string, { file_name: string }>;
+      expect(Object.keys(stored)).not.toContain(EMPTY_HASH);
+      expect(Object.values(stored).map((m) => m.file_name).sort()).toEqual(["real.txt", "second.txt"]);
+    }, 120_000);
+
+    test("a record with a stored size of 0 under another hash is not the record of an empty file and stays", async () => {
+      const { docs, indexDir, metadataFile } = await seedIndexWithEmptyRecord();
+      const stored = JSON.parse(readFileSync(metadataFile, "utf8")) as Record<string, Record<string, unknown>>;
+      const real = Object.values(stored).find((m) => m.file_name === "real.txt")!;
+      const otherHash = "f".repeat(64);
+      stored[otherHash] = { ...real, file_name: "special.txt", file_path: join(docs, "special.txt"), file_hash: otherHash, file_size: 0 };
+      writeFileSync(metadataFile, JSON.stringify(stored));
+      const indexer = new FileIndexer({ index_dir: indexDir, allowed_roots: [docs] });
+      expect(indexer.listIndexedFiles().map((f) => f.file_name).sort()).toEqual(["real.txt", "special.txt"]);
+      indexer.close();
+    }, 120_000);
+
+    test("an empty file is refused before the hash lookup, even when a record sits under the empty hash", async () => {
+      const { docs, indexer } = setup();
+      const empty = join(docs, "empty.ts");
+      writeFileSync(empty, "");
+      indexer.metadata[EMPTY_HASH] = emptyFileRecord(docs, docs);
+      await expect(indexer.indexFile({ file_path: empty })).rejects.toThrow("No indexable content in");
       indexer.close();
     }, 120_000);
 
