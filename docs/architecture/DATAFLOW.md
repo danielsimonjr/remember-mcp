@@ -168,7 +168,7 @@ The code has no cache with an expiry. It keeps four things in memory:
 |---|---|---|---|
 | The three singletons | none | On the first call that needs them. | `shutdown()` sets them to null. |
 | `RememberSystem.archiveIndex` | user key, then timestamp | In the constructor, from the file names of the archive folder. | `_commitArchive()` adds an entry. The code never removes an entry. |
-| `FileIndexer.metadata` | content hash | In the constructor, from `file_metadata.json`. | `_recordIndex()` adds an entry and writes the file. |
+| `FileIndexer.metadata` | content hash | In the constructor, from `file_metadata.json`. The load deletes the record under the empty-file hash. | `_recordIndex()` adds an entry and writes the file. |
 | The SQLite page cache | none | By SQLite. | By SQLite. |
 
 A search reads the sidecar JSON from disk on every call. The server does not see an archive that another process adds to the folder, until the next start.

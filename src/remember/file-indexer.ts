@@ -29,6 +29,8 @@ const MIN_CHUNK_SIZE = 32;
 const MAX_CHUNK_SIZE = 1_000_000;
 const DEFAULT_EXCLUDES = [".git", "__pycache__", "node_modules", ".pyc", ".mp4", ".mp3"];
 const CODE_TYPES = new Set(["python", "javascript", "typescript", "java", "cpp", "c"]);
+// The key under which every empty file is stored: the SHA-256 of zero bytes.
+const EMPTY_FILE_HASH = createHash("sha256").update("").digest("hex");
 
 const TYPE_MAP: Record<string, string> = {
   ".py": "python",
@@ -209,7 +211,15 @@ export class FileIndexer {
         console.error("File metadata is not an object; starting empty");
         return {};
       }
-      return data as Record<string, FileMeta>;
+      const records = data as Record<string, FileMeta>;
+      // An index that an earlier version built can hold the record of an empty code file. Every empty file hashes to
+      // that one key, and `indexFile` now refuses a zero-byte file, so nothing else can write or remove it. It would
+      // stay in `list_indexed_files`, `get_file_info` and `search_files`. Drop it here; the next save writes the drop.
+      if (EMPTY_FILE_HASH in records) {
+        delete records[EMPTY_FILE_HASH];
+        console.error(`Dropped the record of an empty file from ${this.metadataFile}`);
+      }
+      return records;
     } catch (err) {
       const backup = `${this.metadataFile}.corrupt`;
       try {

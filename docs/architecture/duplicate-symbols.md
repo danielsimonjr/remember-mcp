@@ -4,9 +4,14 @@
 
 # Duplicate Symbols
 
-Names that are OWN-DEFINED (not merely re-exported) by >= 2 distinct files across the monorepo, then CLASSIFIED (see `DupEntryTag`) so the actionable subset is clear: `TRUE_DUPLICATE` (real merge targets) vs `DISPATCH_VARIANT` (>=2 `mathTyped(...)` registrations of the same public name — distinct dispatch surfaces, Bucket C delegation candidates, not copy-paste bodies), `ALIAS_DELEGATION` (a `const X = importedY` forward, excluded once <2 real bodies remain), and `ALLOWLISTED` (matches `duplicate-allowlist.json`: hot-path `is*` guards, AssemblyScript mirrors, per-package `VERSION` strings).
+A name is listed here when two or more distinct files across the monorepo define it. A file that only re-exports the name does not count. Each name carries one tag (see `DupEntryTag`), so the actionable subset is clear:
 
-> **Note:** This report groups names by OWN definition, not by call graph, then classifies each flagged name (see DupEntryTag): TRUE_DUPLICATE (the actionable merge targets), DISPATCH_VARIANT (>=2 mathTyped(...) registrations of the same public name — distinct dispatch surfaces, Bucket C delegation candidates, not copy-paste bodies), ALIAS_DELEGATION (a const-alias forward to an imported symbol, not an independent body — excluded once fewer than 2 real bodies remain), and ALLOWLISTED (matches duplicate-allowlist.json: hot-path is* guards, AssemblyScript mirrors, per-package VERSION strings). NOT detected: same-file typed-dispatch overload polymorphism for different argument shapes within one registration — a human still triages TRUE_DUPLICATE entries using the defining files + public flags before merging anything.
+- `TRUE_DUPLICATE`: a real merge target.
+- `DISPATCH_VARIANT`: two or more `mathTyped(...)` registrations of the same public name. The registrations are distinct dispatch surfaces, not copy-paste bodies.
+- `ALIAS_DELEGATION`: a `const X = importedY` forward. The entry is excluded once fewer than two real bodies remain.
+- `ALLOWLISTED`: the name matches `duplicate-allowlist.json`. Examples are hot-path `is*` guards, mirrors in another language and per-package `VERSION` strings.
+
+> **Note:** This report groups names by OWN definition, not by call graph, then classifies each flagged name (see DupEntryTag): TRUE_DUPLICATE (the actionable merge targets), DISPATCH_VARIANT (>=2 mathTyped(...) registrations of the same public name — distinct dispatch surfaces, not copy-paste bodies), ALIAS_DELEGATION (a const-alias forward to an imported symbol, not an independent body — excluded once fewer than 2 real bodies remain), and ALLOWLISTED (matches duplicate-allowlist.json: for example hot-path is* guards, mirrors in another language, per-package VERSION strings). NOT detected: same-file typed-dispatch overload polymorphism for different argument shapes within one registration — a human still triages TRUE_DUPLICATE entries using the defining files + public flags before merging anything.
 
 ## Summary — runtime (function/constant/class)
 
@@ -34,7 +39,7 @@ Names that are OWN-DEFINED (not merely re-exported) by >= 2 distinct files acros
 
 _None._
 
-### DISPATCH_VARIANT — distinct public typed-dispatch surfaces (Bucket C candidates)
+### DISPATCH_VARIANT — distinct public typed-dispatch surfaces
 
 _None._
 
